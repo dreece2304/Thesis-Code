@@ -4,6 +4,14 @@
 clear all
 clc
 
+
+% NOTE: When decribing power it is relative to the ESS. This means the a
+% -ve power is a ESS charging and a +ve power is it discharging
+
+
+
+
+
 %% Nomenclature
 
 %function [NPV] = System(Cap1 Cap2)
