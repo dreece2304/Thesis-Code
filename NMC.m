@@ -1,4 +1,4 @@
-function [tt,Ut, SOC] = NMC(t_span, SOC0)
+function [tt,Ut, SOC] = NMC(t_span, SOC0,P)
 
 
 global R_p1 C_p1 R_p2 C_p2 Q_n w1 w2 w3 
@@ -26,8 +26,7 @@ c0(3) = U_p20;
 % function and used in the main script file)
 
 tt = [t_span(1):t_span(2)];
-load('Frequency');
-P = 1000*(-19.9.*Fr([t_span(1):t_span(2)]) +995.2)/(0.97*0.99*0.95);
+
 It = [1:length(tt)];
 I = ((P)/3.7)/27040; % Generate I(t) (I had to divide by the number of cells that were in the overall system)
 % Now calculate the approximate solution
