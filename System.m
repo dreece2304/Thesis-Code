@@ -18,19 +18,21 @@ clc
 
 % Frequency data is loaded into workspace
 load('Frequency.mat')
-
+Fr = [Fr Fr Fr Fr Fr Fr];
 % Define size of output arrays
-%P_Required = zeros(1,length(Fr));
-%P_output1 = zeros(1,length(Fr));
-%P_output2 = zeros(1,length(Fr));
-%SOC1 = zeros(1,length(Fr));
-%SOC2 = zeros(1,length(Fr));
-Cap = [5 2.5];
+P_Required = zeros(1,length(Fr));
+P_output1 = zeros(1,length(Fr));
+P_output2 = zeros(1,length(Fr));
+SOC1 = zeros(1,length(Fr)); SOC10 = zeros(1,length(Fr));
+SOC2 = zeros(1,length(Fr)); SOC20 = zeros(1,length(Fr));
+Cap = [10 0.1];
+SOH = 1;
 % A for loop is created for each second of frequency data
-gamma_d = 1; SOC10 = 0.5; SOC20 = 0.5;
+gamma_d = 1; SOC10(1) = 0.5; SOC20(1) = 0.5;
     % The required power is calculated from the Power Function
-    P_Required = PowerFreq(Fr(1:100000));
-for i = 1:100000
+    P_Required = PowerFreq(Fr);
+
+for i = 1:length(Fr)
     
   % The control function is implemented 
   [P_output1(i), P_output2(i),SOC1(i),SOC2(i)] = Control(P_Required(i), SOC10(i), SOC20(i), Cap);
@@ -39,17 +41,29 @@ for i = 1:100000
   P_Out(i) = (P_output1(i) + P_output2(i))'; 
   
   % The degradation is calculated each month
-  %if i == 2628000 || i == 2628000 
+  if mod(i,2628000)==0 % This determines a month interval
+      n = (i/2628000);
+      [L_cyc, L_cal] = cycle_count(SOC1(1:i),[1:i]);
+      L = L_cal + sum(L_cyc); 
+      SOH = 1 - L;
+  end
+  if SOH < 0.98
+      break
+  end
   
 end
-P_Required = P_Required';
+
+%%
+% The power not delivered is calculated
 P_Missed = (abs(P_Required) - abs(P_Out));
 P_Missed = P_Missed';
-P_Missed_Month = reshape(P_Misses,2628000,1);
-P_Required_Month = reshape(P_Required,2628000,1);
+% The missed power and required power are converted into a matrix where
+% each column represents one month
+P_Missed_Month = reshape(P_Missed,2628000,72);
+P_Required_Month = reshape(P_Required,2628000,72);
 % Set NPV function inputs.
-NPV_In.P_Missed = P_Missed_Month;
-NPV_In.P_Required = P_Required_Month;
+NPV_In.P_Missed = sum(P_Missed_Month);
+NPV_In.P_Required = sum(abs(P_Required_Month));
 NPV_In.Cap1 = Cap(1);
 NPV_In.Cap2 = Cap(2);
 

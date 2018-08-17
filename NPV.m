@@ -18,9 +18,9 @@ function [NPV_Out] = NPV(NPV_In)
 %
 %% Define Constants
 Rev = 8; % Revenue from NG each month in $/(MW.Month)
-Cost_1 = 500000; % Specific cost of Battery system in $/MWh
-Cost_2 = 1500000; % Specific cost of SC system in $/MWh
-i = 0.05; % Internal rate of return
+Cost_1 = 250000; % Specific cost of Battery system in $/MWh
+Cost_2 = 10000000; % Specific cost of SC system in $/MWh
+i = 0.08/12; % Internal rate of return per month
 
 %% Function Code
 Revenue = Rev*730*2*NPV_In.Cap1;
