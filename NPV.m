@@ -30,7 +30,7 @@ R0 = Cost_1*NPV_In.Cap1 + Cost_2*NPV_In.Cap2; % Initial investment is calculated
 Cash_Flow = zeros(1, length(NPV_In.P_Missed));
 CF(1) = -R0;
 for t = 1:length(NPV_In.P_Missed)
-    R_t(t) = (1-(NPV_In.P_Missed(t)/NPV_In.P_Required(t)))*Revenue - OPEX; % Change once talked to Adrien
+    R_t(t) = (1-(NPV_In.P_Missed(t)/NPV_In.P_Required(t)))*Revenue - OPEX; % Change once talked to Adrien and add in price of electricity when balancing.
     Cash_Flow(t) = R_t(t)/(1 + i)^t;
     month(t) = t; CF(t+1) = CF(t) + R_t(t)/(1 + i)^t;
 end

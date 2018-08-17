@@ -18,7 +18,7 @@ clc
 
 % Frequency data is loaded into workspace
 load('Frequency.mat')
-Fr = [Fr Fr Fr Fr Fr Fr];
+
 % Define size of output arrays
 P_Required = zeros(1,length(Fr));
 P_output1 = zeros(1,length(Fr));
@@ -35,10 +35,10 @@ gamma_d = 1; SOC10(1) = 0.5; SOC20(1) = 0.5;
 for i = 1:length(Fr)
     
   % The control function is implemented 
-  [P_output1(i), P_output2(i),SOC1(i),SOC2(i)] = Control(P_Required(i), SOC10(i), SOC20(i), Cap);
+  [P_output1(i), P_output2(i),SOC1(i),SOC2(i),b] = Control(P_Required(i), SOC10(i), SOC20(i), Cap);
   SOC10(i+1) = SOC1(i); P_output1(i+1) = P_output1(i);
   SOC20(i+1) = SOC2(i); P_output2(i+1) = P_output2(i);
-  P_Out(i) = (P_output1(i) + P_output2(i))'; 
+  P_Out(i) = (P_output1(i)*b(1) + P_output2(i)*b(2))'; 
   
   % The degradation is calculated each month
   if mod(i,2628000)==0 % This determines a month interval
@@ -47,7 +47,7 @@ for i = 1:length(Fr)
       L = L_cal + sum(L_cyc); 
       SOH = 1 - L;
   end
-  if SOH < 0.98
+  if SOH < 0.8
       break
   end
   
@@ -55,12 +55,12 @@ end
 
 %%
 % The power not delivered is calculated
-P_Missed = (abs(P_Required) - abs(P_Out));
+P_Missed = (abs(P_Required(1:i)) - abs(P_Out));
 P_Missed = P_Missed';
 % The missed power and required power are converted into a matrix where
 % each column represents one month
-P_Missed_Month = reshape(P_Missed,2628000,72);
-P_Required_Month = reshape(P_Required,2628000,72);
+P_Missed_Month = reshape(P_Missed,2628000,n);
+P_Required_Month = reshape(P_Required(1:i),2628000,n);
 % Set NPV function inputs.
 NPV_In.P_Missed = sum(P_Missed_Month);
 NPV_In.P_Required = sum(abs(P_Required_Month));
