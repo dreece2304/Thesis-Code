@@ -20,7 +20,7 @@ function [NPV_Out] = NPV(NPV_In)
 Rev = 8; % Revenue from NG each month in $/(MW.Month)
 Cost_1 = 250000; % Specific cost of Battery system in $/MWh
 Cost_2 = 10000000; % Specific cost of SC system in $/MWh
-i = 0.08/12; % Internal rate of return per month
+r = 0.08/12; % Internal rate of return per month
 
 %% Function Code
 Revenue = Rev*730*2*NPV_In.Cap1;
@@ -31,8 +31,8 @@ Cash_Flow = zeros(1, length(NPV_In.P_Missed));
 CF(1) = -R0;
 for t = 1:length(NPV_In.P_Missed)
     R_t(t) = (1-(NPV_In.P_Missed(t)/NPV_In.P_Required(t)))*Revenue - OPEX; % Change once talked to Adrien
-    Cash_Flow(t) = R_t(t)/(1 + i)^t;
-    month(t) = t; CF(t+1) = CF(t) + R_t(t)/(1 + i)^t;
+    Cash_Flow(t) = R_t(t)/(1 + r)^t;
+    month(t) = t; CF(t+1) = CF(t) + R_t(t)/(1 + r)^t;
 end
 
 % Now the total NPV can be calculated

@@ -38,7 +38,7 @@ for i = 1:length(Fr)
   [P_output1(i), P_output2(i),SOC1(i),SOC2(i)] = Control(P_Required(i), SOC10(i), SOC20(i), Cap);
   SOC10(i+1) = SOC1(i); P_output1(i+1) = P_output1(i);
   SOC20(i+1) = SOC2(i); P_output2(i+1) = P_output2(i);
-  P_Out(i) = (P_output1(i) + P_output2(i))'; 
+  P_Out(i) = (P_output1(i+1) + P_output2(i+1)); 
   
   % The degradation is calculated each month
   if mod(i,2628000)==0 % This determines a month interval
@@ -54,13 +54,14 @@ for i = 1:length(Fr)
 end
 
 %%
+Month = i/2628000;
 % The power not delivered is calculated
-P_Missed = (abs(P_Required) - abs(P_Out));
+P_Missed = (abs(P_Required(1:i) - abs(P_Out)));
 P_Missed = P_Missed';
 % The missed power and required power are converted into a matrix where
 % each column represents one month
-P_Missed_Month = reshape(P_Missed,2628000,72);
-P_Required_Month = reshape(P_Required,2628000,72);
+P_Missed_Month = reshape(P_Missed,2628000,Month);
+P_Required_Month = reshape(P_Required(1:i),2628000,Month);
 % Set NPV function inputs.
 NPV_In.P_Missed = sum(P_Missed_Month);
 NPV_In.P_Required = sum(abs(P_Required_Month));

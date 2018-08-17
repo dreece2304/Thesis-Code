@@ -14,7 +14,7 @@ Cap1 = Cap(1) ; Cap2 = Cap(2);
 SOC1ex = SOC10 - (P_Required/3600)/Cap1; 
 SOC2ex = SOC20 - (P_Required/3600)/Cap2;
 if P_Required == 0 % If the required power is zero then the if statement determines whether to try and balance the ESSs. 
-    if SOC10 <= 0.55 && SOC10 >= 0.45
+    if SOC10 <= 0.6 && SOC10 >= 0.4
         %f there is a power is taken from grid here there is an equivalent
         %cost
         P_output1 = 0; % Since the battery is in an acceptable range its power output is zero
@@ -29,15 +29,11 @@ if P_Required == 0 % If the required power is zero then the if statement determi
 
         elseif SOC20 <= 1 && SOC20 >= 0.55
             P_output2 = -1;
-            
-
-        else
-            P_output2 = 0;
-            
+                       
  
         end
-    elseif SOC10 > 0.55 && SOC10 <= 1
-        P_output1 = 0.9; % This allows the battery to output 10%  of its power rating to try and balance
+    elseif SOC10 > 0.6 && SOC10 <= 1
+        P_output1 = 0.1*Cap1*2; % This allows the battery to output 10%  of its power rating to try and balance
         if SOC20 < 0.55 && SOC20 > 0.45 % Now the power output of the supercapacitor from the grid is determined. 
             P_output2 = 0;
             
@@ -49,12 +45,9 @@ if P_Required == 0 % If the required power is zero then the if statement determi
         elseif SOC20 <= 1 && SOC20 >= 0.55
             P_output2 = -1;
             
-
-        else
-            P_output2 = 0;
         end
 
-    elseif SOC10 < 0.45 && SOC10 >=0
+    elseif SOC10 < 0.4 && SOC10 >=0
         P_output1 = -0.9;
         if SOC20 < 0.55 && SOC20 > 0.45 % Now the power output of the supercapacitor from the grid is determined. 
             P_output2 = 0;
@@ -67,9 +60,6 @@ if P_Required == 0 % If the required power is zero then the if statement determi
         elseif SOC20 <= 1 && SOC20 >= 0.55
             P_output2 = -1;
             
-
-        else
-            P_output2 = 0;
         end
 
         
