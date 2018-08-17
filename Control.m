@@ -18,58 +18,84 @@ if P_Required == 0 % If the required power is zero then the if statement determi
         %f there is a power is taken from grid here there is an equivalent
         %cost
         P_output1 = 0; % Since the battery is in an acceptable range its power output is zero
-        SOC1 = SOC10;
+
         if SOC20 < 0.55 && SOC20 > 0.45 % Now the power output of the supercapacitor from the grid is determined. 
             P_output2 = 0;
             
-            SOC2 = SOC20;
-        elseif SOC20 <= 0.4 && SOC20 >= 0.25 
-            P_output2 = 0.9;
+
+        elseif SOC20 <= 0.45 && SOC20 >= 0 
+            P_output2 = 1;
             %CfG = 0 ; % Cost from grid in $/
-            SOC2 = SOC20 - P_output2/(Cap2*3600);
-        elseif SOC20 <= 0.8 && SOC20 >= 0.6
-            P_output2 = 0.9;
+
+        elseif SOC20 <= 1 && SOC20 >= 0.55
+            P_output2 = -1;
             
-            SOC2 = SOC20 - P_output2/(Cap2*3600);
+
         else
             P_output2 = 0;
             
-            SOC2 = SOC20; 
+ 
         end
     elseif SOC10 > 0.55 && SOC10 <= 1
         P_output1 = 0.9; % This allows the battery to output 10%  of its power rating to try and balance
-        P_output2 = 0;
-        SOC1 = SOC10 - (P_output1/3600)/Cap1;
-        SOC2 = SOC20;
+        if SOC20 < 0.55 && SOC20 > 0.45 % Now the power output of the supercapacitor from the grid is determined. 
+            P_output2 = 0;
+            
+
+        elseif SOC20 <= 0.45 && SOC20 >= 0 
+            P_output2 = 1;
+            %CfG = 0 ; % Cost from grid in $/
+
+        elseif SOC20 <= 1 && SOC20 >= 0.55
+            P_output2 = -1;
+            
+
+        else
+            P_output2 = 0;
+        end
+
     elseif SOC10 < 0.45 && SOC10 >=0
         P_output1 = -0.9;
-        P_output2 = 0;
-        SOC1 = SOC10 - (P_output1/3600)/Cap1;
-        SOC2 = SOC20;
+        if SOC20 < 0.55 && SOC20 > 0.45 % Now the power output of the supercapacitor from the grid is determined. 
+            P_output2 = 0;
+            
+
+        elseif SOC20 <= 0.45 && SOC20 >= 0 
+            P_output2 = 1;
+            %CfG = 0 ; % Cost from grid in $/
+
+        elseif SOC20 <= 1 && SOC20 >= 0.55
+            P_output2 = -1;
+            
+
+        else
+            P_output2 = 0;
+        end
+
         
     end
 elseif abs(P_Required) >= SC_lim
-    if SOC2ex >= 0 && SOC2ex <= 1
+    if SOC2ex >= 0.2 && SOC2ex <= 1
        P_output2 = P_Required;
        P_output1 = 0;
-    elseif SOC2ex < 0 && SOC2ex > 1
+    elseif SOC2ex < 0.2 || SOC2ex > 1
         P_output2 = 0;
-        if SOC1ex >= 0 && SOC1ex <= 1
+        if SOC1ex >= 0.2 && SOC1ex <= 1
             P_output1 = P_Required;
-        elseif SOC1ex < 0 && SOC1ex > 1
+        elseif SOC1ex < 0.2 || SOC1ex > 1
             P_output1 = 0;
         end
     end
 elseif abs(P_Required) < SC_lim && P_Required ~= 0
-       if SOC1ex >= 0 && SOC1ex <= 1
+       if SOC1ex >= 0.2 && SOC1ex <= 1
            P_output1 = P_Required;
            P_output2 = 0;
-       elseif SOC1ex < 0 && SOC1ex > 1
+       elseif SOC1ex < 0.2 || SOC1ex > 1
            P_output1 = 0;
-           if SOC2ex >= 0 && SOC2ex <= 1
+           if SOC2ex >= 0.2 && SOC2ex <= 1
                P_output2 = P_Required;
                P_output1 = 0;
-           elseif SOC2ex < 0 && SOC2ex > 1
+           elseif SOC2ex < 0.2 || SOC2ex > 1
                P_output2 = 0;
                P_output1 = 0;
            end

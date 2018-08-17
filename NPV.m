@@ -18,12 +18,12 @@ function [NPV_Out] = NPV(NPV_In)
 %
 %% Define Constants
 Rev = 8; % Revenue from NG each month in $/(MW.Month)
-Cost_1 = 1000; % Specific cost of Battery system in $/MW
-Cost_2 = 5000; % Specific cost of SC system in $/MW
+Cost_1 = 500000; % Specific cost of Battery system in $/MWh
+Cost_2 = 1500000; % Specific cost of SC system in $/MWh
 i = 0.05; % Internal rate of return
 
 %% Function Code
-Revenue = Rev*730*NPV_In.Cap1;
+Revenue = Rev*730*2*NPV_In.Cap1;
 OPEX = (0.01*(NPV_In.Cap1))/12; % OPEX is ~1% of equipment cost for the year.
 R0 = Cost_1*NPV_In.Cap1 + Cost_2*NPV_In.Cap2; % Initial investment is calculated
 % A FOR loop is used to calculate the cash flow at the end of each month
