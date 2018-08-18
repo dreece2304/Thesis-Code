@@ -18,8 +18,8 @@ function [NPV_Out] = NPV(NPV_In)
 %
 %% Define Constants
 Rev = 8; % Revenue from NG each month in $/(MW.Month)
-Cost_1 = 250000; % Specific cost of Battery system in $/MWh
-Cost_2 = 10000000; % Specific cost of SC system in $/MWh
+Cost_1 = 500000; % Specific cost of Battery system in $/MWh
+Cost_2 = 1000000; % Specific cost of SC system in $/MWh
 i = 0.08/12; % Internal rate of return per month
 
 %% Function Code
@@ -43,6 +43,7 @@ NPV_Out.NPV = NPV;
 NPV_Out.CAPEX = -R0;
 NPV_Out.Cash = CF;
 NPV_Out.Month = [0,month];
+x = [1:i];
 
 end
 
