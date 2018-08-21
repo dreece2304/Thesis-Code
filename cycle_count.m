@@ -1,4 +1,4 @@
-function [L_cyc, L_cal] = cycle_count(SOC1,t)
+function [ L_cyc, L_cal] = cycle_count(SOC1,t)
 % This function takes the SOC profile of the battery, converts it into
 % cycles using a rainflow algorithm and calculates the estimated
 % degradation for each cycle as well as the calander ageing. 
@@ -26,7 +26,7 @@ SOC_cycle = rf(:,2);% SOC of each cycle
 t_c = rf(:,5); % Time of each cycle
 n_i = rf(:,3); % No. of cycle (0.5 or 1)
 SOC_avg = mean(SOC_cycle); % Overall average of the SOC for time t
-
+Start = rf(:,3);
 
 L_cyc = zeros(1,length(DoD));
 

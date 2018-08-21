@@ -11,7 +11,7 @@ function [P_required] = PowerFreq(Fr)
 
 %% Relation
 
-if Fr > 49.98 & Fr < 50.02
+if Fr > 49.975 && Fr < 50.025
     P_required = 0;
 else 
     P_required = -19.9074*Fr + 995.3176;

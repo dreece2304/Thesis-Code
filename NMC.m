@@ -28,7 +28,7 @@ c0(3) = U_p20;
 tt = [t_span(1):t_span(2)];
 
 It = [1:length(tt)];
-I = ((P)/3.7)/27040; % Generate I(t) (I had to divide by the number of cells that were in the overall system)
+I = ((P)/3.7)/27; % Generate I(t) (I had to divide by the number of cells that were in the overall system)
 % Now calculate the approximate solution
 [tt,c]=ode45(@(tt,c)ECMSOC(tt,c,I,It),t_span,c0); % This is the ODE solver.
 

@@ -23,14 +23,14 @@ Cost_2 = 1000000; % Specific cost of SC system in $/MWh
 i = 0.08/12; % Internal rate of return per month
 
 %% Function Code
-Revenue = Rev*730*2*NPV_In.Cap1;
-OPEX = (0.01*(NPV_In.Cap1))/12; % OPEX is ~1% of equipment cost for the year.
+Revenue = Rev*730*2*(NPV_In.Cap1+NPV_In.Cap2);
 R0 = Cost_1*NPV_In.Cap1 + Cost_2*NPV_In.Cap2; % Initial investment is calculated
+OPEX = (0.01*(R0))/12; % OPEX is ~1% of equipment cost for the year.
 % A FOR loop is used to calculate the cash flow at the end of each month
 Cash_Flow = zeros(1, length(NPV_In.P_Missed));
 CF(1) = -R0;
 for t = 1:length(NPV_In.P_Missed)
-    R_t(t) = (1-(NPV_In.P_Missed(t)/NPV_In.P_Required(t)))*Revenue - OPEX; % Change once talked to Adrien and add in price of electricity when balancing.
+    R_t(t) = (1-((NPV_In.P_Missed(t)/NPV_In.P_Required(t))))*Revenue - OPEX; % Change once talked to Adrien and add in price of electricity when balancing.
     Cash_Flow(t) = R_t(t)/(1 + i)^t;
     month(t) = t; CF(t+1) = CF(t) + R_t(t)/(1 + i)^t;
 end
@@ -43,7 +43,7 @@ NPV_Out.NPV = NPV;
 NPV_Out.CAPEX = -R0;
 NPV_Out.Cash = CF;
 NPV_Out.Month = [0,month];
-x = [1:i];
+
 
 end
 
