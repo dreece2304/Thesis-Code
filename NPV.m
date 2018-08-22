@@ -1,4 +1,4 @@
-function [NPV_Out] = NPV(NPV_In)
+function [NPV_Out] = NPV(NPV_In,c)
 % This is the function to calculate the NPV of the designed ESS
 
 %% Nomenclature
@@ -21,16 +21,16 @@ Rev = 8; % Revenue from NG each month in $/(MW.Month)
 Cost_1 = 500000; % Specific cost of Battery system in $/MWh
 Cost_2 = 1000000; % Specific cost of SC system in $/MWh
 i = 0.08/12; % Internal rate of return per month
-
+gain = 1 - c*0.2;
 %% Function Code
-Revenue = Rev*730*2*(NPV_In.Cap1+NPV_In.Cap2);
+Revenue = Rev*750*2*(NPV_In.Cap1+NPV_In.Cap2);
 R0 = Cost_1*NPV_In.Cap1 + Cost_2*NPV_In.Cap2; % Initial investment is calculated
-OPEX = (0.01*(R0))/12; % OPEX is ~1% of equipment cost for the year.
+OPEX = (0.01*(NPV_In.Cap1))/12; % OPEX is ~1% of equipment cost for the year.
 % A FOR loop is used to calculate the cash flow at the end of each month
 Cash_Flow = zeros(1, length(NPV_In.P_Missed));
 CF(1) = -R0;
 for t = 1:length(NPV_In.P_Missed)
-    R_t(t) = (1-((NPV_In.P_Missed(t)/NPV_In.P_Required(t))))*Revenue - OPEX; % Change once talked to Adrien and add in price of electricity when balancing.
+    R_t(t) = (1-(gain*(NPV_In.P_Missed(t)/NPV_In.P_Required(t))))*Revenue - OPEX; % Change once talked to Adrien and add in price of electricity when balancing.
     Cash_Flow(t) = R_t(t)/(1 + i)^t;
     month(t) = t; CF(t+1) = CF(t) + R_t(t)/(1 + i)^t;
 end

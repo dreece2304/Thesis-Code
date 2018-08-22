@@ -6,10 +6,10 @@ function [ L_cyc, L_cal] = cycle_count(SOC1,t)
 %% Nomenclature
 
 %% Define Constants
-kd1 = 1.4e5; % kdi are the parameters for the DoD stress factor
+kd1 = 2.0e5; % kdi are the parameters for the DoD stress factor
 kd2 = -5.01e-1;
 kd3 = -1.23e5;
-kt = 4.14e-10; % Degradation with time parameter
+kt = 4.14e-12; % Degradation with time parameter
 ksig = 1.04; % Stress parameter for SOC
 
 
@@ -34,7 +34,7 @@ for i = 1:length(DoD)
 L_cyc(i+1) =  n_i(i)*exp(ksig*(SOC_cycle(i)-0.5))*((kd1*DoD(i)^(kd2) + kd3)^-1); % cyclic degradation equation
 
 end
-L_cal = (kt*1000000)*exp(ksig*(SOC_avg-0.5)); % Calander degradation equation
+L_cal = (kt*t(end))*exp(ksig*(SOC_avg-0.5)); % Calander degradation equation
 L = L_cal + sum(L_cyc); % Total degradation 
 
 end

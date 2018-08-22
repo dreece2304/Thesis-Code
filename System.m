@@ -1,9 +1,10 @@
-%function [NPV1] = System(Cap)
+function [NPV1] = System(Cap)
 %% Overall ESS File
 % This function calculates the NPV of an ESS for frequency response using
 % the capacity of 2 ESSs as inputs. 
-
-
+%clear 
+%clc
+%Cap = [5 0.00];
 
 % NOTE: When decribing power it is relative to the ESS. This means the a
 % -ve power is a ESS charging and a +ve power is it discharging
@@ -13,6 +14,7 @@
 
 
 %% Nomenclature
+
 
 
 % Frequency data is loaded into workspace
@@ -25,9 +27,6 @@ P_output2 = zeros(1,length(Fr));
 SOC1 = zeros(1,length(Fr)); SOC10 = zeros(1,length(Fr));
 SOC2 = zeros(1,length(Fr)); SOC20 = zeros(1,length(Fr));
 
-P_balance1 = zeros(1,length(Fr));
-P_balance2 = zeros(1,length(Fr));
-
 SOH = 1;
 if Cap(2) == 0
     c = 0;
@@ -36,22 +35,17 @@ else
 end
 % A for loop is created for each second of frequency data
 gamma_d = 1; SOC10(1) = 0.5; SOC20(1) = c*0.5;
-
+    % The required power is calculated from the Power Function
+    
 
 for i = 1:length(Fr)
-    
-  % The required power is calculated from the Power Function
-  P_Required(i) = PowerFreq(Fr(i));
+    P_Required(i) = PowerFreq(Fr(i));
   % The control function is implemented 
   [P_output1(i), P_output2(i),SOC1(i),SOC2(i),b] = Control(P_Required(i), SOC10(i), SOC20(i), Cap, gamma_d(end));
-  % The initial state of charge is set for the next loop iteration
-  SOC10(i+1) = SOC1(i);  SOC20(i+1) = c*SOC2(i); 
-  
-  % Balancing power output is calculated
-  balance = (b ==0 );
-  P_balance1(i) = balance(1)*P_output1(i);  P_balance2(i) = balance(2)*P_output2(i);
-
- % The total power outut is calculated
+  SOC10(i+1) = SOC1(i);
+  P_output1(i+1) = P_output1(i);
+  SOC20(i+1) = c*SOC2(i); 
+  P_output2(i+1) = c*P_output2(i);
   P_Out(i) = (P_output1(i)*b(1) + P_output2(i)*b(2))'; 
   
   % The degradation is calculated each month
@@ -105,8 +99,8 @@ NPV_In.Cap1 = Cap(1);
 NPV_In.Cap2 = Cap(2);
 
 % Call NPV function
-[NPV_Out] = NPV(NPV_In);
-NPV1 = -NPV_Out.NPV
+[NPV_Out] = NPV(NPV_In,c);
+NPV1 = -NPV_Out.NPV;
 %NPV_Aim = NPV_Out.NPV;
-
-%end
+%plot(NPV_Out.Month,NPV_Out.Cash,'--')
+end
