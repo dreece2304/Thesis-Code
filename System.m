@@ -102,5 +102,5 @@ NPV_In.Cap2 = Cap(2);
 [NPV_Out] = NPV(NPV_In,c);
 NPV1 = -NPV_Out.NPV;
 %NPV_Aim = NPV_Out.NPV;
-%plot(NPV_Out.Month,NPV_Out.Cash,'--')
+%plot(NPV_Out.Month,NPV_Out.Cash,'-')
 end
