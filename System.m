@@ -1,10 +1,10 @@
-function [NPV1,SOC1avg, Lifetime] = System(Cap)
+function [NPV1,SOC1avg, Lifetime, P_Miss] = System(Cap)
 %% Overall ESS File
 % This function calculates the NPV of an ESS for frequency response using
 % the capacity of 2 ESSs as inputs. 
 %clear 
 %clc
-%Cap = [5 0.00 1.5];
+%Cap = [5 0.0 0];
 
 % NOTE: When decribing power it is relative to the ESS. This means the a
 % -ve power is a ESS charging and a +ve power is it discharging
@@ -102,13 +102,13 @@ NPV_In.Cap2 = Cap(2);
 [NPV_Out] = NPV(NPV_In,c);
 NPV1 = -NPV_Out.NPV;
 %NPV_Aim = NPV_Out.NPV;
-%plot(NPV_Out.Month,NPV_Out.Cash,'-')
+plot(NPV_Out.Month,NPV_Out.Cash,'-')
 
 SOC1avg = mean(SOC1);
 Lifetime = (round((0.2/(L/12)),0));
-
+P_Miss = sum(NPV_In.P_Missed)/sum(NPV_In.P_Required);
 
 
 time = toc;
 
-end
+

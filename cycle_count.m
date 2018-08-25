@@ -9,8 +9,8 @@ function [ L_cyc, L_cal] = cycle_count(SOC1,t)
 kd1 = 2.0e5; % kdi are the parameters for the DoD stress factor
 kd2 = -5.01e-1;
 kd3 = -1.23e5;
-kt = 4.14e-10; % Degradation with time parameter
-ksig = 1.04; % Stress parameter for SOC
+kt = 2.14e-11; % Degradation with time parameter
+ksig = 1.1; % Stress parameter for SOC
 
 
 %% Rainflow Algorithm

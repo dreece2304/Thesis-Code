@@ -26,16 +26,16 @@ hold(axes1,'on');
 Y1 = (NPV_Out.Cash/1000000);
 [x0,y0] =intersections(NPV_Out.Month, Y1,[0 80],[0 0]); % Calculate paypack period
 plot(NPV_Out.Month, Y1,[0 80],[0 0],'r--')
-xlabel('Time [Month]'); ylabel('NPV [M$]');
+xlabel('Time (t/month)'); ylabel('NPV (M$)');
 title('Cash Flow of Baseline Case');
 
 
 box(axes1,'on');
 grid(axes1,'on');
 % Create textarrow
-ta1 = annotation(figure1,'textarrow',[0.8 0.7],...
-    [0.640063694267516 0.79]);
-ta1.String = 'PP = 25 Months';            % set the text for the first annotation
+ta1 = annotation(figure1,'textarrow',[0.45 0.39],...
+    [0.3 0.45]);
+ta1.String = 'PP = 26 Months';            % set the text for the first annotation
 ta1.HorizontalAlignment = 'center';
 %% P OUT and SOC
 t = [1:1000000];
@@ -55,7 +55,7 @@ plot(x,polyval(poly,x),'rx','DisplayName','Fitted'); hold off;
 
 grid on
 box on
-xlabel('Time [Months]');ylabel('SOH');title('SOH of Battery');
+xlabel('Time (t/months)');ylabel('SOH');title('SOH of Battery');
 
 %% SOC and Power Profile 
 % Show sample period of 1 hour
