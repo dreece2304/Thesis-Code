@@ -1,4 +1,4 @@
-function [NPV_Out] = NPV(NPV_In,c)
+function [NPV_Out] = NPV(NPV_In,c,P)
 % This is the function to calculate the NPV of the designed ESS
 
 %% Nomenclature
@@ -19,9 +19,9 @@ function [NPV_Out] = NPV(NPV_In,c)
 %% Define Constants
 Rev = 8; % Revenue from NG each month in $/(MW.Month)
 Cost_1 = 500000; % Specific cost of Battery system in $/MWh
-Cost_2 = 8000000; % Specific cost of SC system in $/MWh
-i = 0.08/12; % Internal rate of return per month
-gain = 1 - c*0.05;
+Cost_2 = P; % Specific cost of SC system in $/MWh
+i = 0.05/12; % Internal rate of return per month
+gain = 1 - c*0.2;
 %% Function Code
 Revenue = Rev*750*2*(NPV_In.Cap1+NPV_In.Cap2);
 R0 = Cost_1*NPV_In.Cap1 + Cost_2*NPV_In.Cap2; % Initial investment is calculated
