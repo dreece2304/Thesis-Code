@@ -1,6 +1,7 @@
 from datetime import datetime, timezone
 
 import pandas as pd
+import pytest
 
 from prediction.mapper import category_summary, classify, enrich, rank_thin_modelable
 
@@ -40,7 +41,7 @@ def test_enrich_and_rank():
     e = enrich(df, now=now)
     assert e.category_model.tolist() == ["weather", "econ", "sports", "weather", "politics"]
     assert e.mid.tolist()[0] == 0.45 and e.mid.tolist()[3] == 0.30  # falls back to last
-    assert e.spread.iloc[0] == 0.10
+    assert e.spread.iloc[0] == pytest.approx(0.10)
     assert e.days_to_close.iloc[0] == 2.0
     assert pd.isna(e.thinness.iloc[3])  # unquoted
     assert e.thinness.iloc[0] > e.thinness.iloc[2]  # wide thin book beats tight deep one
