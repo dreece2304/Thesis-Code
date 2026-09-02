@@ -134,10 +134,32 @@ def test_kalshi_markets_paginate_and_convert_cents(monkeypatch):
     assert "rules_primary" in df.columns
 
 
-def test_kalshi_orderbook(monkeypatch):
-    _stub(monkeypatch, [{"orderbook": {"yes": [[45, 100], [44, 50]], "no": None}}])
+def test_kalshi_dollar_fields_and_mve_filter(monkeypatch):
+    seen = _stub(monkeypatch, [{"markets": [
+        {"ticker": "KXHIGHNY-1", "yes_bid_dollars": "0.6900", "yes_ask_dollars": "0.7000",
+         "last_price_dollars": "0.6900", "volume_fp": "1807.09", "open_interest_fp": "1746.09",
+         "liquidity_dollars": "120.5", "mve_collection_ticker": ""},
+        {"ticker": "KXMVE-1", "yes_bid_dollars": "0.1", "yes_ask_dollars": "0.2",
+         "mve_collection_ticker": "KXMVECROSSCATEGORY-SHARD1-R"},
+    ], "cursor": ""}])
+    df = kalshi.markets(series_ticker="KXHIGHNY", max_close="2026-09-03T00:00:00Z")
+    assert df.ticker.tolist() == ["KXHIGHNY-1"]
+    assert df.yes_bid.iloc[0] == 0.69 and df.yes_ask.iloc[0] == 0.70
+    assert df.volume.iloc[0] == pytest.approx(1807.09) and df.liquidity.iloc[0] == pytest.approx(120.5)
+    assert seen[0][1]["max_close_ts"] == 1788393600 and seen[0][1]["series_ticker"] == "KXHIGHNY"
+    
+
+def test_kalshi_orderbook_shapes(monkeypatch):
+    _stub(monkeypatch, [{"orderbook": {"yes": [[45, 100], [44, 50]], "no": None}},
+                        {"orderbook_fp": {"yes_dollars": [["0.6500", "52.00"], ["0.6600", "50.00"]],
+                                          "no_dollars": [["0.2600", "25.00"], ["0.3000", "303.15"]]}}])
     ob = kalshi.orderbook("A")
     assert ob["yes"] == [(0.45, 100), (0.44, 50)] and ob["no"] == []
+    assert kalshi.best_quotes(ob) == {"yes_bid": 0.45, "yes_bid_qty": 100, "yes_ask": None, "yes_ask_qty": 0.0}
+    ob = kalshi.orderbook("B")
+    assert ob["yes"][0] == (0.65, 52.0) and ob["no"][1] == (0.30, 303.15)
+    q = kalshi.best_quotes(ob)
+    assert q["yes_bid"] == 0.66 and q["yes_ask"] == 0.70 and q["yes_ask_qty"] == 303.15
 
 
 def test_fred_csv_fallback(monkeypatch):

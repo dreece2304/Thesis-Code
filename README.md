@@ -7,7 +7,7 @@ full brief, hard rules and milestones.
 |---|---|---|
 | `shared/` | ledger (DuckDB + Brier), data pullers, sim utilities, weekly reports | working, tested |
 | `investing/` | volatility-targeted trend following, paper-traded (Alpaca paper only) | skeleton |
-| `prediction/` | calibrated Kalshi models, paper-traded, fractional Kelly | fees + bankroll sim done |
+| `prediction/` | Kalshi weather model (lead project, `docs/KALSHI_WEATHER_SPEC.md`), market mapper, fees, Kelly sim | weather pipeline built, paper only |
 | `forecasting/` | non-LLM regime and event forecasts feeding 1 and 2 | skeleton |
 | `nanofab_saas/` | PSF service (Geant4), thin-film fitting, lab ops spec | skeleton |
 | `materials/` | open closed-loop materials discovery | skeleton |
@@ -47,6 +47,17 @@ print(simulate_preset("weather_daily", kelly_multiplier=0.25).summary())
 Weekly status: build `shared.report.Status` objects and call
 `shared.report.publish(...)`. It always writes `reports/YYYY-WW.md` and posts to
 Notion when `NOTION_API_KEY` and `NOTION_PAGE_<PROJECT>` are set.
+
+## Weather model (project 2, lead)
+
+```bash
+PAPER=1 python -m prediction.weather.live --refresh-data   # build 3-year archive, fit errors, score, paper orders
+python -c "from prediction.weather import archive, backtest; print(backtest.run_backtest(archive.load_archive()).to_markdown())"
+```
+
+Everything is paper: the job raises without `PAPER=1`, orders go to a
+`paper_orders` table in `data_cache/ledger_weather.duckdb`, and no code in the
+repo can place an exchange order.
 
 ## Audit of an existing machine
 

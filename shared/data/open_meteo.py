@@ -104,18 +104,20 @@ def archive(lat: float, lon: float, start: str | date, end: str | date,
 
 @cached_frame("open_meteo_previous_runs", ttl_seconds=None)
 def previous_runs(lat: float, lon: float, start: str | date, end: str | date,
-                  variable: str = "temperature_2m_max", model: str = "gfs_seamless",
-                  previous_days: int = 3, temperature_unit: str = "fahrenheit",
+                  variable: str = "temperature_2m", model: str = "gfs_seamless",
+                  previous_days: int = 5, temperature_unit: str = "fahrenheit",
                   timezone: str = "UTC") -> pd.DataFrame:
-    """Archived forecasts issued 1..N days earlier, for bias correction.
+    """Archived hourly forecasts issued 1..N days earlier, for error modelling.
 
-    Columns are ``<variable>`` (day-0 run) and ``<variable>_previous_dayK``.
+    The previous-runs endpoint only serves hourly variables. Columns are
+    ``<variable>`` (the most recent run) and ``<variable>_previous_dayK``; take
+    a daily max per local date to get the lead-K forecast of the daily high.
     """
-    daily = [variable] + [f"{variable}_previous_day{k}" for k in range(1, previous_days + 1)]
+    hourly = [variable] + [f"{variable}_previous_day{k}" for k in range(1, previous_days + 1)]
     params = {
         "latitude": lat, "longitude": lon, "start_date": str(start), "end_date": str(end),
-        "daily": ",".join(daily), "models": model, "temperature_unit": temperature_unit,
+        "hourly": ",".join(hourly), "models": model, "temperature_unit": temperature_unit,
         "precipitation_unit": "inch", "timezone": timezone,
     }
     js = http.get_json(PREVIOUS_RUNS_URL, params=params, source="open_meteo")
-    return _frame(js["daily"])
+    return _frame(js["hourly"])

@@ -1,8 +1,9 @@
 # CLAUDE.md
 
 This file is the working brief for Claude Code on this repo. The master brief
-follows verbatim; a "Repo state" section at the end records what exists and
-what is blocked. Keep both current.
+follows verbatim; a "Repo state" section records what exists and what is
+blocked. Keep both current. The weather model spec it references lives at
+`docs/KALSHI_WEATHER_SPEC.md`.
 
 ## Repo state (update every session)
 
@@ -10,14 +11,28 @@ what is blocked. Keep both current.
   `claude/new-session-uz9j48`). Per-project branches (`inv/`, `pm/`, ...) start
   once this skeleton is on `main`.
 - Environment: `uv venv .venv && uv pip install -e ".[dev,investing,prediction]"`, then `pytest`.
-- Done: repo skeleton, CI, `shared/ledger`, `shared/data` (FRED, Open-Meteo,
-  NWS, GHCN, Kalshi read-only, yfinance), `shared/sim`, `shared/report`,
-  `prediction/fees.py`, `prediction/sim/kelly.py` (from spec), `audit/scan.py`,
-  `audit/REPORT.md` for this repo. 51 tests pass offline.
-- Blocked, needs Duncan: the two JSX files (`kelly_bankroll_simulator.jsx`,
-  `regime_portfolio_simulator.jsx`) are not in this repo; the Kelly sim was
-  built from the spec and needs reconciling. The WSL scan has to be run
-  locally with `python -m audit.scan`; the Geant4 PSF code is not in this repo.
+  Tests are offline (network is blocked in the test session).
+- Done: repo skeleton, CI, `shared/ledger`, `shared/data` (FRED, Open-Meteo
+  forecast/ensemble/archive/previous-runs, NWS, GHCN, Kalshi read-only,
+  yfinance), `shared/sim`, `shared/report`, `prediction/fees.py`,
+  `prediction/sim/kelly.py` (from spec), `prediction/mapper.py`,
+  `prediction/weather/` (stations, archive, errors, model, market_model,
+  kalshi, sizing, evaluation, backtest, live, report), `forecasting/data.py`,
+  `forecasting/baseline.py`, `investing/backtest.py`, `investing/overlay.py`,
+  `audit/scan.py`, `audit/REPORT.md` for this repo.
+- Weather model: paper only. `prediction/weather/live.py` refuses to run
+  without `PAPER=1`. Ledger for it is `data_cache/ledger_weather.duckdb`
+  (project name `weather`), separate from the investing ledger.
+- Live facts confirmed 2026-09-02: Kalshi KXHIGH* rules name CLINYC, CLIMDW,
+  CLIMIA, CLILAX, CLIAUS, CLIDEN, CLIPHL and settle "according to The Weather
+  Company"; settled markets expose the settled high in `expiration_value`;
+  the API now serves `*_dollars` string prices and `orderbook_fp`. Open-Meteo
+  previous-runs serves hourly leads 1..5 for 3 years in one call per model.
+- Blocked, needs Duncan: `kelly_bankroll_simulator.jsx` and
+  `regime_portfolio_simulator.jsx` are not in this repo (sim built from spec).
+  The WSL scan must be run locally with `python -m audit.scan`; the Geant4 PSF
+  code is not in this repo. Yahoo Finance is unreachable from the web sandbox
+  so the investing real-data backtest has to run on the home machine.
 - This repo was `Thesis-Code` (2018 MATLAB battery model). Those files stay at
   the root untouched until Duncan decides where they go.
 
@@ -86,8 +101,8 @@ Fee model: taker fee per contract = 0.07 × price × (1 − price), maker = 25% 
 Milestones:
 1. Port `kelly_bankroll_simulator.jsx` to `prediction/sim/kelly.py` with the market-type presets; tests on expected ruin behaviour.
 2. Kalshi market mapper: pull all open markets, classify by category, liquidity, time to resolution, and store the exact resolution rule text. Output a ranked table of thin, modelable markets.
-3. Weather model (first target): for each active temperature or precipitation market, pull the Open-Meteo ensemble (GFS, ECMWF, ICON) for the resolution station, bias-correct per station using at least three years of forecast-vs-observed from NWS or GHCN, and output a probability per bucket. Log to ledger. Start with 3 to 5 cities.
-4. Paper trading loop: daily job that scores every open weather market, computes edge vs market price after fees, sizes at quarter Kelly with a per-city-per-day correlation cap, and logs hypothetical trades.
+3. Weather model (first target): follow `KALSHI_WEATHER_SPEC.md` exactly. It contains the final decisions on cities, contract type, probability model, entry and exit, sizing, order handling, data sources, pipeline, backtest protocol, tests, and the go-live gate. Start here before any other project 2 work.
+4. Paper trading loop: as specified in `KALSHI_WEATHER_SPEC.md` (scheduled job, limit orders, quarter Kelly, correlation grouping, shared ledger).
 5. Econ nowcast (second target): CPI and payrolls distribution from Cleveland Fed nowcast, GDPNow, consensus scrape, and alt data (AAA gas, Truflation if accessible). Compare bucket probabilities to market.
 6. Fed consistency scanner: check that Kalshi single-meeting and cumulative rate-path markets are mutually consistent with CME futures; flag violations.
 7. Longshot-selling base-rate model: for "will X happen by date" markets, estimate historical base rates by event class (LLM used only to classify and extract, never to set the probability).
@@ -140,11 +155,12 @@ Scan the WSL2 home directory and any project folders Duncan points to. For each 
 
 ## Order of work
 1. Repo skeleton, shared infrastructure, tests, CI (GitHub Actions running pytest).
-2. Project 7 audit (cheap, informs project 4).
-3. Project 2 milestone 2 and 3 (weather), project 3 milestone 1 and 2, project 1 milestone 1 and 2. These share data code, so build them together.
-4. Project 4a PSF service prototype.
-5. Project 5 milestone 1 and 2, project 6 milestone 1 and 2.
-6. Everything else in milestone order, rotating weekly so no project stalls.
+2. Project 2 weather model per `KALSHI_WEATHER_SPEC.md` (lead project; highest priority).
+3. Project 7 audit (cheap, informs project 4).
+4. Project 2 milestone 2 (market mapper), project 3 milestone 1 and 2, project 1 milestone 1 and 2. These share data code, so build them together.
+5. Project 4a PSF service prototype.
+6. Project 5 milestone 1 and 2, project 6 milestone 1 and 2.
+7. Everything else in milestone order, rotating weekly so no project stalls.
 
 ## Reporting
 Every Sunday (or whenever a milestone completes) write a short status per project: done, blocked, next, and any question for Duncan. Post to the matching Notion page under a "Claude Code status" heading and append to `reports/`. Keep each status under 150 words.

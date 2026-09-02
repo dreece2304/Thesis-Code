@@ -119,7 +119,8 @@ def snapshot(out_dir: str | Path = "prediction/out", max_days: float = 30, top: 
     """Pull all open markets, enrich, persist parquet + markdown, return ranked table."""
     out_dir = Path(out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
-    raw = kalshi.markets(status="open", refresh=refresh)
+    horizon = datetime.now(timezone.utc) + pd.Timedelta(days=max_days)
+    raw = kalshi.markets(status="open", max_close=horizon, refresh=refresh)
     df = enrich(raw)
     ranked = rank_thin_modelable(df, max_days=max_days)
     stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M")

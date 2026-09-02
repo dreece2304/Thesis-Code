@@ -21,3 +21,4 @@ mlruns/
 # editors
 .vscode/
 .idea/
+prediction/out/
