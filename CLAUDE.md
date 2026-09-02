@@ -22,7 +22,11 @@ blocked. Keep both current. The weather model spec it references lives at
   `audit/scan.py`, `audit/REPORT.md` for this repo.
 - Weather model: paper only. `prediction/weather/live.py` refuses to run
   without `PAPER=1`. Ledger for it is `data_cache/ledger_weather.duckdb`
-  (project name `weather`), separate from the investing ledger.
+  (project name `weather`), separate from the investing ledger. Entry is at
+  lead 1 and the add at lead 0 because Kalshi opens each day's markets at
+  14:00 UTC the day before (spec said 3 and 1; awaiting Duncan's sign-off).
+  First backtest and live run: `reports/weather/backtest_2026-09-02.md`.
+  Chicago loses to the baseline on Brier; do not trade it until fixed.
 - Live facts confirmed 2026-09-02: Kalshi KXHIGH* rules name CLINYC, CLIMDW,
   CLIMIA, CLILAX, CLIAUS, CLIDEN, CLIPHL and settle "according to The Weather
   Company"; settled markets expose the settled high in `expiration_value`;

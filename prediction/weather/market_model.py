@@ -29,6 +29,13 @@ def nws_point_forecast(station: Station) -> pd.DataFrame:
     return pd.DataFrame(rows)
 
 
+def baseline_forecast(forecasts: dict[str, float], recent_bias: dict[str, float] | None = None) -> float:
+    """Stand-in for the NWS point forecast: mean of the models after removing each
+    model's trailing mean error (forecasters correct known biases)."""
+    rb = recent_bias or {}
+    return float(np.mean([f + rb.get(m, 0.0) for m, f in forecasts.items()]))
+
+
 def baseline_probability(forecast_high: float, threshold: int, side: str, sd: float = BASELINE_SD) -> float:
     lo, hi = cut(threshold, side)
     upper = 1.0 if hi == np.inf else stats.norm.cdf((hi - forecast_high) / sd)

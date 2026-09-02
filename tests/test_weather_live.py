@@ -44,10 +44,10 @@ def _stub_live(monkeypatch, tmp_path):
         st = {s.series: s for s in STATIONS.values()}[series_ticker]
         rows = []
         for t in (85, 88):
-            rows.append({"ticker": f"{series_ticker}-26SEP05-T{t - 1}", "title": f"Will the maximum temperature be >{t - 1}° on Sep 5, 2026?",
+            rows.append({"ticker": f"{series_ticker}-26SEP03-T{t - 1}", "title": f"Will the maximum temperature be >{t - 1}° on Sep 3, 2026?",
                          "strike_type": "greater", "floor_strike": t - 1, "cap_strike": None,
                          "rules_primary": f"... recorded at X ({st.cli}) ...", "yes_bid": 0.30, "yes_ask": 0.33, "last_price": 0.31})
-        rows.append({"ticker": f"{series_ticker}-26SEP05-B86.5", "title": "Will the maximum temperature be 86-87° on Sep 5, 2026?",
+        rows.append({"ticker": f"{series_ticker}-26SEP03-B86.5", "title": "Will the maximum temperature be 86-87° on Sep 3, 2026?",
                      "strike_type": "between", "floor_strike": 85.5, "cap_strike": 87.5,
                      "rules_primary": f"... ({st.cli}) ...", "yes_bid": 0.2, "yes_ask": 0.25, "last_price": 0.2})
         return pd.DataFrame(rows)
@@ -60,7 +60,7 @@ def _stub_live(monkeypatch, tmp_path):
     monkeypatch.setattr(kx, "markets", markets)
     monkeypatch.setattr(kx, "orderbook", lambda ticker, depth=10: {"yes": [(0.30, 100.0)], "no": [(0.67, 50.0)]})
     monkeypatch.setattr(open_meteo, "forecast", forecast)
-    monkeypatch.setattr(MM, "nws_point_forecast", lambda st: pd.DataFrame({"date": [date(2026, 9, 5)], "high": [88], "name": ["Sat"]}))
+    monkeypatch.setattr(MM, "nws_point_forecast", lambda st: pd.DataFrame({"date": [date(2026, 9, 3)], "high": [88], "name": ["Thu"]}))
     monkeypatch.setenv("WEATHER_LEDGER_PATH", str(tmp_path / "weather.duckdb"))
     return now
 
@@ -74,7 +74,7 @@ def test_live_run_end_to_end(monkeypatch, tmp_path):
         df = L.predictions(project="weather")
         assert len(df) == 6 and df.model_prob.between(0, 1).all() and df.market_prob.notna().all()
         notes = json.loads(df.notes.iloc[0])
-        assert notes["lead"] == 3 and notes["side"] == "above" and notes["snapshot_id"]
+        assert notes["lead"] == 1 and notes["side"] == "above" and notes["snapshot_id"]
         book = KW.PaperBook(L)
         orders = book.orders()
         assert len(out["orders"]) == len(orders) >= 1
@@ -84,8 +84,8 @@ def test_live_run_end_to_end(monkeypatch, tmp_path):
         assert st.project == "prediction" and "predictions this week" in st.done[0] and st.blocked
     snaps = list(KW.snapshot_dir().glob("*.jsonl"))
     assert snaps and sum(1 for _ in snaps[0].open()) == 6
-    # a second run the same day scores again but the add-lead rule does not fire at lead 3
-    out2 = live.run(now=now, snapshots=False)
+    # next morning (lead 0): scores again with the lead-1 fit; adds only on top of the entry
+    out2 = live.run(now=now.replace(day=3), snapshots=False)
     assert out2["scored"] == 6
 
 

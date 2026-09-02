@@ -29,8 +29,13 @@ from .sizing import PAPER_BANKROLL, bet_key, correlation_groups, size_bet
 from .stations import ACTIVE, MODELS, Station
 
 PROJECT = "weather"
-ENTRY_LEAD, ADD_LEAD = 3, 1
+# Kalshi opens each day's KXHIGH markets at 14:00 UTC the day before, so the
+# spec's 3-day entry is not available: enter at lead 1 (evening run), add at
+# lead 0 (morning-of run). Override with WEATHER_ENTRY_LEAD / WEATHER_ADD_LEAD.
+ENTRY_LEAD = int(os.environ.get("WEATHER_ENTRY_LEAD", "1"))
+ADD_LEAD = int(os.environ.get("WEATHER_ADD_LEAD", "0"))
 ENTRY_EDGE, ADD_EDGE = 0.05, 0.03
+MAX_LEAD = 5
 
 
 def weather_ledger_path() -> Path:
@@ -84,16 +89,17 @@ def score(stations, archive: pd.DataFrame, fits: pd.DataFrame, now: datetime, sn
             nws_cache[st.key] = pd.DataFrame(columns=["date", "high"])
         for m in mk.itertuples():
             lead = (m.target_date - today).days
-            if lead < 1 or lead > 5:
+            if lead < 0 or lead > MAX_LEAD:
                 continue
+            fit_lead = max(lead, 1)   # lead-0 decisions use the lead-1 error fit (conservative)
             key = (st.key, m.target_date)
             if key not in fc_cache:
                 fc_cache[key] = model_forecasts(st, m.target_date, **kw)
             fc = fc_cache[key]
-            dists = err.lookup(fits, st.key, lead, m.target_date.month)
+            dists = err.lookup(fits, st.key, fit_lead, m.target_date.month)
             if not fc or not dists:
                 continue
-            rv = err.recent_variance(archive, st.key, lead, asof=pd.Timestamp(m.target_date))
+            rv = err.recent_variance(archive, st.key, fit_lead, asof=pd.Timestamp(m.target_date))
             p, sd, comp = probability(fc, dists, rv, int(m.threshold), m.side)
             nws = nws_cache[st.key]
             nws_high = nws.loc[nws["date"] == m.target_date, "high"]
@@ -128,10 +134,10 @@ def decide(scored: pd.DataFrame, book: KW.PaperBook, ledger: Ledger, archive: pd
         lead = int(g.lead.iloc[0])
         if lead not in (ENTRY_LEAD, ADD_LEAD):
             continue
-        required = ENTRY_EDGE if lead == ENTRY_LEAD else ADD_EDGE
         key = bet_key(station, target, groups)
-        if lead == ADD_LEAD and exposure.get(key, 0.0) <= 0:
-            continue  # add only on top of an entry
+        # an add without an earlier entry (missed evening run) is treated as an entry
+        is_entry = lead == ENTRY_LEAD or exposure.get(key, 0.0) <= 0
+        required = ENTRY_EDGE if is_entry else ADD_EDGE
         best = None
         for r in g.itertuples():
             for buy, p_side, ask in (("yes", r.p, r.yes_ask), ("no", 1 - r.p, None if r.yes_bid is None else round(1 - r.yes_bid, 4))):

@@ -82,6 +82,19 @@ def recent_variance(archive: pd.DataFrame, station: str, lead: int, asof: pd.Tim
     return out
 
 
+def recent_bias(archive: pd.DataFrame, station: str, lead: int, asof: pd.Timestamp,
+                window_days: int = 60, min_n: int = 10) -> dict[str, float]:
+    """model -> mean error (settlement - forecast) over the trailing window before asof."""
+    asof = pd.Timestamp(asof)
+    a = archive[(archive.station == station) & (archive.lead == lead)
+                & (archive.target_date < asof) & (archive.target_date >= asof - pd.Timedelta(days=window_days))]
+    out = {}
+    for model, g in a.dropna(subset=["error"]).groupby("model"):
+        if len(g) >= min_n:
+            out[model] = float(g["error"].mean())
+    return out
+
+
 def summary(fits: pd.DataFrame) -> pd.DataFrame:
     """Mean bias and sd by station, lead and model (averaged over months)."""
     return fits.groupby(["station", "lead", "model"]).agg(

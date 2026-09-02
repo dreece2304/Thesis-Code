@@ -2,8 +2,8 @@
 
 Error fits for month M use only target dates before M. Recent-variance
 weights and correlation groups use only dates before each decision date.
-Market prices are reconstructed from the commoditised baseline (mean model
-forecast, 3 deg F normal) plus logit noise, quoted with a two-tick spread;
+Market prices are reconstructed from the commoditised baseline (bias-corrected
+mean model forecast, 3 deg F normal) plus logit noise, quoted with a two-tick spread;
 fills follow the maker rule; fees on every fill.
 """
 from __future__ import annotations
@@ -17,10 +17,10 @@ from shared.sim.metrics import max_drawdown
 
 from ..fees import fee_per_contract
 from .archive import ensemble_mean_errors
-from .errors import fit_errors, lookup, recent_variance
+from .errors import fit_errors, lookup, recent_bias, recent_variance
 from .evaluation import calibration, go_live_gate, paired_bootstrap
 from .kalshi import maker_fill
-from .market_model import baseline_probability, reconstructed_quotes
+from .market_model import baseline_forecast, baseline_probability, reconstructed_quotes
 from .model import probability
 from .sizing import (CAP_PER_BET, CAP_TOTAL, KELLY_MULT, PAPER_BANKROLL, bet_key,
                      correlation_groups, size_bet)
@@ -30,8 +30,8 @@ from .stations import cut
 @dataclass
 class BacktestConfig:
     bankroll: float = PAPER_BANKROLL
-    entry_lead: int = 3
-    add_lead: int = 1
+    entry_lead: int = 1            # Kalshi lists each day's markets the day before (14:00 UTC)
+    add_lead: int | None = None    # spec wanted 3 then 1; only lead 1 (and lead 0 live) exist
     entry_edge: float = 0.05
     add_edge: float = 0.03
     offsets: tuple = (-2, -1, 0, 1, 2)      # thresholds around the baseline forecast
@@ -56,8 +56,8 @@ class BacktestReport:
     def to_markdown(self) -> str:
         s = self.summary
         lines = [f"# Weather backtest ({s['start']} to {s['end']})", "",
-                 f"predictions: {s['n_predictions']}, city-days: {s['n_city_days']}, trades: {s['n_trades']}, "
-                 f"fill rate: {s['fill_rate']:.0%}", "",
+                 f"predictions: {s['n_predictions']}, city-days: {s['n_city_days']}, "
+                 f"trade candidates: {s['n_candidates']}, filled: {s['n_trades']} ({s['fill_rate']:.0%})", "",
                  "| scope | n | Brier ours | Brier market | Brier baseline | gap (mkt-ours) | 90% CI |",
                  "|---|---:|---:|---:|---:|---:|---|"]
         for scope, r in s["brier"].items():
@@ -88,11 +88,25 @@ def _edge(p: float, side: str, quotes: dict) -> tuple[str, float | None, float]:
     return best
 
 
+def _settle(t: dict, settlement: float) -> float:
+    lo, hi = cut(t["threshold"], t["side"])
+    yes = lo < settlement < hi
+    won = yes if t["buy"] == "yes" else not yes
+    pnl = (t["contracts"] * (1 - t["price"]) if won else -t["contracts"] * t["price"]) - t["fee"]
+    t.update({"outcome_yes": int(yes), "won": bool(won), "pnl": pnl})
+    return pnl
+
+
 def run_backtest(archive: pd.DataFrame, cfg: BacktestConfig | None = None) -> BacktestReport:
+    """Walk forward by decision date. See the module docstring for the rules."""
     cfg = cfg or BacktestConfig()
     rng = np.random.default_rng(cfg.seed)
     a = archive.dropna(subset=["settlement"]).copy()
     a["target_date"] = pd.to_datetime(a["target_date"])
+    leads = (cfg.entry_lead,) if cfg.add_lead is None or cfg.add_lead == cfg.entry_lead else (cfg.entry_lead, cfg.add_lead)
+    settle_map = a.groupby(["station", "target_date"])["settlement"].first().to_dict()
+    fc_map = {k: dict(zip(g.model, g.forecast)) for k, g in a.groupby(["station", "target_date", "lead"])}
+    stations = sorted(a.station.unique())
     months = sorted(a["target_date"].dt.to_period("M").unique())
     months = months[cfg.warmup_months:]
     if cfg.max_months:
@@ -101,88 +115,83 @@ def run_backtest(archive: pd.DataFrame, cfg: BacktestConfig | None = None) -> Ba
     preds, trades = [], []
     bankroll = cfg.bankroll
     equity = {}
-    open_bets: dict[str, float] = {}         # bet_key -> stake
+    open_bets: dict[str, float] = {}
     open_trades: list[dict] = []
+    chosen: dict[tuple, tuple] = {}
 
     for month in months:
         m_start = month.to_timestamp()
         m_end = (month + 1).to_timestamp()
-        fits = fit_errors(a, before=m_start, leads=(cfg.entry_lead, cfg.add_lead), months=(month.month,))
+        fits = fit_errors(a, before=m_start, leads=leads, months=(month.month, (month + 1).month))
         if fits.empty:
             continue
-        sub = a[(a.target_date >= m_start) & (a.target_date < m_end)]
-        for target, day in sub.groupby("target_date"):
-            # settle bets that expire today first (they were decided on earlier dates)
+        for d in pd.date_range(m_start, m_end - pd.Timedelta(days=1), freq="D"):
+            # 1. settle trades whose target is today
             still = []
             for t in open_trades:
-                if t["target_date"] == target:
-                    settlement = day[day.station == t["station"]]["settlement"].iloc[0]
-                    lo, hi = cut(t["threshold"], t["side"])
-                    yes = lo < settlement < hi
-                    won = yes if t["buy"] == "yes" else not yes
-                    pnl = (t["contracts"] * (1 - t["price"]) if won else -t["contracts"] * t["price"]) - t["fee"]
-                    t.update({"outcome_yes": int(yes), "won": bool(won), "pnl": pnl})
-                    bankroll += pnl + t["stake"]  # return the stake that was set aside
+                if t["target_date"] == d:
+                    pnl = _settle(t, settle_map[(t["station"], d)])
+                    bankroll += pnl + t["stake"]
                     open_bets[t["bet_key"]] = max(0.0, open_bets.get(t["bet_key"], 0.0) - t["stake"])
                     trades.append(t)
                 else:
                     still.append(t)
             open_trades = still
-            equity[target] = bankroll + sum(t["stake"] for t in open_trades)
-
-            groups = correlation_groups(err_wide, asof=target - pd.Timedelta(days=cfg.entry_lead))
-            for station, g in day.groupby("station"):
-                settlement = float(g["settlement"].iloc[0])
-                by_lead = {int(l): dict(zip(gl.model, gl.forecast)) for l, gl in g.groupby("lead")}
-                if cfg.entry_lead not in by_lead or cfg.add_lead not in by_lead:
-                    continue
-                f_entry = by_lead[cfg.entry_lead]
-                base_fc = float(np.mean(list(f_entry.values())))
-                key = bet_key(station, target, groups)
-                chosen = None
-                for lead in (cfg.entry_lead, cfg.add_lead):
-                    decision = target - pd.Timedelta(days=lead)
-                    dists = lookup(fits, station, lead, month.month)
+            equity[d] = bankroll + sum(t["stake"] for t in open_trades)
+            groups = correlation_groups(err_wide, asof=d)
+            # 2. decide: entries at entry_lead, adds at add_lead
+            for lead in leads:
+                target = d + pd.Timedelta(days=lead)
+                for station in stations:
+                    fc = fc_map.get((station, target, lead))
+                    settlement = settle_map.get((station, target))
+                    if not fc or settlement is None:
+                        continue
+                    dists = lookup(fits, station, lead, target.month)
                     if not dists:
                         continue
-                    rv = recent_variance(a, station, lead, asof=decision)
-                    fc = by_lead[lead]
-                    base_lead = float(np.mean(list(fc.values())))
+                    rv = recent_variance(a, station, lead, asof=d)
+                    rb = recent_bias(a, station, lead, asof=d)
+                    base_fc = baseline_forecast(fc, rb)
+                    key = bet_key(station, target, groups)
+                    is_entry = lead == cfg.entry_lead
+                    prior = chosen.get((station, target))
                     best = None
                     for threshold, side in candidate_contracts(base_fc, cfg.offsets):
                         p, sd, comp = probability(fc, dists, rv, threshold, side)
-                        p_base = baseline_probability(base_lead, threshold, side, cfg.baseline_sd)
+                        p_base = baseline_probability(base_fc, threshold, side, cfg.baseline_sd)
                         bid, ask, mid = reconstructed_quotes(p_base, rng, cfg.noise_sd_logit)
-                        quotes = {"yes_bid": bid, "yes_ask": ask}
                         lo, hi = cut(threshold, side)
                         outcome = int(lo < settlement < hi)
-                        preds.append({"station": station, "target_date": target, "lead": lead,
+                        preds.append({"station": station, "target_date": target, "decision_date": d, "lead": lead,
                                       "threshold": threshold, "side": side, "p_ours": p, "sd": sd,
                                       "p_market": mid, "p_baseline": p_base, "outcome": outcome})
-                        if lead == cfg.add_lead and chosen is not None and (threshold, side) != chosen:
+                        if not is_entry and prior is not None and (threshold, side) != prior:
                             continue
-                        buy, opp, edge = _edge(p, side, quotes)
+                        buy, opp, edge = _edge(p, side, {"yes_bid": bid, "yes_ask": ask})
                         if best is None or edge > best["edge"]:
-                            best = {"threshold": threshold, "side": side, "buy": buy, "edge": edge,
-                                    "p": p, "quotes": quotes, "opp": opp}
+                            best = {"threshold": threshold, "side": side, "buy": buy, "edge": edge, "p": p,
+                                    "quotes": {"yes_bid": bid, "yes_ask": ask}, "opp": opp}
                     if best is None:
                         continue
-                    required = cfg.entry_edge if lead == cfg.entry_lead else cfg.add_edge
+                    if not is_entry and prior is None:
+                        continue  # adds only on top of an entry
+                    required = cfg.entry_edge if is_entry else cfg.add_edge
                     if best["edge"] <= required:
                         continue
-                    if lead == cfg.add_lead and chosen is None:
-                        continue  # no add without an entry
                     p_side = best["p"] if best["buy"] == "yes" else 1 - best["p"]
                     limit = round(p_side - required, 2)
+                    if not 0 < limit < 1:
+                        continue
                     fill = maker_fill(best["buy"], limit, best["quotes"], 1)
                     size = size_bet(p_side, limit, bankroll, existing_bet_stake=open_bets.get(key, 0.0),
                                     existing_total_stake=sum(open_bets.values()), multiplier=cfg.kelly_mult,
                                     cap_bet=cfg.cap_bet, cap_total=cfg.cap_total)
-                    rec = {"station": station, "target_date": target, "decision_date": decision, "lead": lead,
+                    rec = {"station": station, "target_date": target, "decision_date": d, "lead": lead,
                            "threshold": best["threshold"], "side": best["side"], "buy": best["buy"],
                            "p": best["p"], "edge": best["edge"], "limit": limit, "opposing": best["opp"],
                            "filled": fill.filled, "contracts": size.contracts, "price": limit,
-                           "bet_key": key, "capped_by": size.capped_by}
+                           "bet_key": key, "capped_by": size.capped_by, "is_entry": is_entry}
                     if not fill.filled or size.contracts == 0:
                         rec.update({"stake": 0.0, "fee": 0.0, "pnl": np.nan, "won": None, "outcome_yes": None})
                         trades.append(rec)
@@ -193,17 +202,11 @@ def run_backtest(archive: pd.DataFrame, cfg: BacktestConfig | None = None) -> Ba
                     bankroll -= stake
                     open_bets[key] = open_bets.get(key, 0.0) + stake
                     open_trades.append(rec)
-                    chosen = (best["threshold"], best["side"])
+                    if is_entry:
+                        chosen[(station, target)] = (best["threshold"], best["side"])
 
-    # anything still open at the end: settle with known outcomes
-    for t in open_trades:
-        row = a[(a.station == t["station"]) & (a.target_date == t["target_date"])]
-        settlement = row["settlement"].iloc[0]
-        lo, hi = cut(t["threshold"], t["side"])
-        yes = lo < settlement < hi
-        won = yes if t["buy"] == "yes" else not yes
-        pnl = (t["contracts"] * (1 - t["price"]) if won else -t["contracts"] * t["price"]) - t["fee"]
-        t.update({"outcome_yes": int(yes), "won": bool(won), "pnl": pnl})
+    for t in open_trades:  # settle whatever is left with known outcomes
+        pnl = _settle(t, settle_map[(t["station"], t["target_date"])])
         bankroll += pnl + t["stake"]
         trades.append(t)
 
@@ -225,7 +228,8 @@ def run_backtest(archive: pd.DataFrame, cfg: BacktestConfig | None = None) -> Ba
         "start": str(P.target_date.min().date()) if len(P) else None,
         "end": str(P.target_date.max().date()) if len(P) else None,
         "n_predictions": int(len(P)), "n_city_days": int(P.groupby(["station", "target_date"]).ngroups) if len(P) else 0,
-        "n_trades": int(len(filled)), "fill_rate": float(T.filled.mean()) if len(T) else 0.0,
+        "n_trades": int(len(filled)), "fill_rate": float((T.filled & (T.contracts > 0)).mean()) if len(T) else 0.0,
+        "n_candidates": int(len(T)),
         "brier": brier, "pnl": pnl, "return": pnl / cfg.bankroll,
         "fees": float(filled.fee.sum()) if len(filled) else 0.0,
         "max_drawdown": max_drawdown(eq.to_numpy()) if len(eq) > 1 else 0.0,

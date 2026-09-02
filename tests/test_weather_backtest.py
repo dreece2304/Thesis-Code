@@ -58,7 +58,7 @@ def test_evaluation_helpers():
 
 def test_backtest_runs_and_beats_noisy_market():
     a = synthetic_archive(days=480)
-    cfg = B.BacktestConfig(warmup_months=6, max_months=2, seed=1)
+    cfg = B.BacktestConfig(warmup_months=6, max_months=2, seed=1, entry_lead=3, add_lead=1)
     rep = B.run_backtest(a, cfg)
     s = rep.summary
     assert s["n_predictions"] > 0 and s["n_city_days"] > 0
@@ -70,23 +70,27 @@ def test_backtest_runs_and_beats_noisy_market():
     assert len(rep.equity) > 0 and abs(rep.equity.iloc[-1] - (cfg.bankroll + s["pnl"])) < 1e-6
     md = rep.to_markdown()
     assert "Brier ours" in md and "gate:" in md
-    if s["n_trades"]:
-        t = rep.trades[rep.trades.filled & (rep.trades.contracts > 0)]
-        assert (t.stake <= cfg.cap_bet * cfg.bankroll * 1.5).all()  # bankroll drifts a little
-        assert t.decision_date.lt(t.target_date).all()
+    assert s["n_trades"] > 0
+    t = rep.trades[rep.trades.filled & (rep.trades.contracts > 0)]
+    assert (t.stake <= cfg.cap_bet * cfg.bankroll * 1.5).all()  # bankroll drifts a little
+    assert t.decision_date.lt(t.target_date).all()
+    assert t.is_entry.any()
+    # stakes come back after settlement, so a good share of candidates get sized
+    assert (rep.trades.contracts > 0).mean() > 0.2
 
 
 def test_backtest_no_lookahead():
     a = synthetic_archive(days=420)
     cfg = B.BacktestConfig(warmup_months=6, max_months=2, seed=3)
     base = B.run_backtest(a, cfg)
-    first_month = base.predictions.target_date.dt.to_period("M").min()
+    first_month = base.predictions.decision_date.dt.to_period("M").min()
     cutoff = (first_month + 1).to_timestamp()
     tampered = a.copy()
     late = tampered.target_date >= cutoff
     tampered.loc[late, "settlement"] += 30
     tampered.loc[late, "error"] += 30
     rep = B.run_backtest(tampered, cfg)
-    p0 = base.predictions[base.predictions.target_date < cutoff].reset_index(drop=True)
-    p1 = rep.predictions[rep.predictions.target_date < cutoff].reset_index(drop=True)
+    cols = ["station", "target_date", "decision_date", "lead", "threshold", "side", "p_ours", "p_market"]
+    p0 = base.predictions[base.predictions.decision_date < cutoff][cols].reset_index(drop=True)
+    p1 = rep.predictions[rep.predictions.decision_date < cutoff][cols].reset_index(drop=True)
     pd.testing.assert_frame_equal(p0, p1)

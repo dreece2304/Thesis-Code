@@ -49,3 +49,10 @@ if this repository becomes the monorepo home.
 - `regime_portfolio_simulator.jsx` and `kelly_bankroll_simulator.jsx`, needed
   for project 1 milestone 1 and project 2 milestone 1. The scanner records
   `javascript` files per project; grep the inventory for `.jsx`.
+
+## Data-source checks done on the way (2026-09-02)
+
+- GHCN-Daily TMAX matches Kalshi's settled high on 199 of 204 days for NYC,
+  CHI, MIA; the rest are unpublished GHCN days and one 5 F Miami gap.
+- Kalshi rules name CLINYC, CLIMDW, CLIMIA, CLILAX, CLIAUS, CLIDEN, CLIPHL
+  and settle "according to The Weather Company".
