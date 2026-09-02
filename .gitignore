@@ -1,0 +1,23 @@
+# secrets
+.env
+# python
+__pycache__/
+*.py[cod]
+.venv/
+*.egg-info/
+build/
+dist/
+.pytest_cache/
+.coverage
+htmlcov/
+# data and outputs
+data_cache/
+*.duckdb
+*.duckdb.wal
+forecasting/out/
+mlruns/
+# notebooks
+.ipynb_checkpoints/
+# editors
+.vscode/
+.idea/

@@ -1,0 +1,39 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "side-projects"
+version = "0.1.0"
+description = "Personal monorepo: systematic investing, prediction markets, forecasting, nanofab SaaS, materials discovery, AI-for-science learning, code audit."
+requires-python = ">=3.11"
+dependencies = [
+  "numpy>=1.26",
+  "pandas>=2.1",
+  "pyarrow>=14",
+  "duckdb>=0.10",
+  "requests>=2.31",
+  "matplotlib>=3.8",
+  "python-dotenv>=1.0",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8", "pytest-cov>=4"]
+data = ["fredapi>=0.5", "yfinance>=0.2.40"]
+investing = ["scipy>=1.11"]
+prediction = ["scipy>=1.11"]
+forecasting = ["scipy>=1.11", "hmmlearn>=0.3"]
+nanofab = ["fastapi>=0.110", "uvicorn>=0.29", "scipy>=1.11"]
+materials = ["ase>=3.22", "pymatgen>=2024.1", "botorch>=0.10", "mlflow>=2.10"]
+learning = ["torch>=2.1", "transformers>=4.38", "peft>=0.9"]
+
+[tool.setuptools.packages.find]
+include = [
+  "shared*", "investing*", "prediction*", "forecasting*",
+  "nanofab_saas*", "materials*", "learning*", "audit*",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+filterwarnings = ["ignore::DeprecationWarning"]
