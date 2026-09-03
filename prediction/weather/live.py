@@ -36,6 +36,12 @@ ENTRY_LEAD = int(os.environ.get("WEATHER_ENTRY_LEAD", "1"))
 ADD_LEAD = int(os.environ.get("WEATHER_ADD_LEAD", "0"))
 ENTRY_EDGE, ADD_EDGE = 0.05, 0.03
 MAX_LEAD = 5
+# After this local hour the day's high is largely set and the market knows it;
+# a lead-0 model score without observations is stale, so no orders.
+LEAD0_CUTOFF_HOUR = int(os.environ.get("WEATHER_LEAD0_CUTOFF_HOUR", "11"))
+# Cities that may receive paper orders. All active cities are still scored and
+# logged. Chicago is excluded until its backtest Brier gap turns positive.
+TRADE_STATIONS = set(os.environ.get("WEATHER_TRADE_STATIONS", "NYC,MIA").split(","))
 
 
 def weather_ledger_path() -> Path:
@@ -91,6 +97,8 @@ def score(stations, archive: pd.DataFrame, fits: pd.DataFrame, now: datetime, sn
             lead = (m.target_date - today).days
             if lead < 0 or lead > MAX_LEAD:
                 continue
+            if lead == 0 and pd.Timestamp(now).tz_convert(st.tz).hour >= LEAD0_CUTOFF_HOUR:
+                continue
             fit_lead = max(lead, 1)   # lead-0 decisions use the lead-1 error fit (conservative)
             key = (st.key, m.target_date)
             if key not in fc_cache:
@@ -131,6 +139,8 @@ def decide(scored: pd.DataFrame, book: KW.PaperBook, ledger: Ledger, archive: pd
     exposure = book.open_exposure().set_index("bet_key")["cost"].to_dict() if len(book.open_exposure()) else {}
     total = sum(exposure.values())
     for (station, target), g in scored.groupby(["station", "target_date"]):
+        if station not in TRADE_STATIONS:
+            continue
         lead = int(g.lead.iloc[0])
         if lead not in (ENTRY_LEAD, ADD_LEAD):
             continue

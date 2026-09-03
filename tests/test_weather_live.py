@@ -78,15 +78,19 @@ def test_live_run_end_to_end(monkeypatch, tmp_path):
         book = KW.PaperBook(L)
         orders = book.orders()
         assert len(out["orders"]) == len(orders) >= 1
+        assert set(orders.station) <= {"NYC", "MIA"}          # Chicago scored but not traded
         assert (orders.limit_price.between(0.01, 0.99)).all()
         assert (orders.contracts * orders.limit_price <= 0.05 * 2000 + 1).all()
         st = report.weekly_status(L, book, now=datetime(2026, 9, 6))
         assert st.project == "prediction" and "predictions this week" in st.done[0] and st.blocked
     snaps = list(KW.snapshot_dir().glob("*.jsonl"))
     assert snaps and sum(1 for _ in snaps[0].open()) == 6
-    # next morning (lead 0): scores again with the lead-1 fit; adds only on top of the entry
-    out2 = live.run(now=now.replace(day=3), snapshots=False)
+    # next morning (lead 0, 08:00 UTC = 04:00 ET): scores again with the lead-1 fit
+    out2 = live.run(now=now.replace(day=3, hour=8), snapshots=False)
     assert out2["scored"] == 6
+    # same afternoon (lead 0 after the cutoff): the high is in, nothing is scored or ordered
+    out3 = live.run(now=now.replace(day=3, hour=21), snapshots=False)
+    assert out3["scored"] == 0 and out3["orders"] == []
 
 
 def test_live_score_skips_far_leads(monkeypatch, tmp_path):
