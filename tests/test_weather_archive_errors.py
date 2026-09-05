@@ -37,9 +37,9 @@ def _stub_archive_sources(monkeypatch, days=800, seed=0):
         df = pd.DataFrame(index=t)
         bias = {"ecmwf_ifs025": 0.0, "gfs_seamless": 1.5, "icon_seamless": -1.0}[model]
         daily = np.repeat(truth, 24)
-        df[variable] = daily - 5 + 5 * (t.hour == 15) - bias + np.repeat(rng.normal(0, 1.0, days), 24)
+        df[variable] = daily - 15 + 15 * (t.hour == 15) - bias + np.repeat(rng.normal(0, 1.0, days), 24)
         for k in range(1, previous_days + 1):
-            df[f"{variable}_previous_day{k}"] = daily - 5 + 5 * (t.hour == 15) - bias + np.repeat(rng.normal(0, 1.5 + 0.5 * k, days), 24)
+            df[f"{variable}_previous_day{k}"] = daily - 15 + 15 * (t.hour == 15) - bias + np.repeat(rng.normal(0, 1.5 + 0.5 * k, days), 24)
         mask = (df.index >= pd.Timestamp(start)) & (df.index < pd.Timestamp(end) + pd.Timedelta(days=1))
         return df[mask]
 

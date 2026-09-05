@@ -12,6 +12,7 @@ import os
 from datetime import date, timedelta
 from pathlib import Path
 
+import numpy as np
 import pandas as pd
 
 from shared.data import ghcn, open_meteo
@@ -29,11 +30,30 @@ def archive_path() -> Path:
     return archive_dir() / "archive.parquet"
 
 
+def climate_day(index: pd.DatetimeIndex, tz: str | None) -> np.ndarray:
+    """Calendar date of each local-clock timestamp in the NWS climate day.
+
+    The climate day is midnight to midnight local standard time, so during
+    daylight time the day starts at 01:00 on the clock: an hour tagged
+    00:xx belongs to the previous climate day.
+    """
+    idx = pd.DatetimeIndex(index)
+    if tz is None:
+        return idx.date
+    aware = idx.tz_localize(tz, ambiguous="NaT", nonexistent="shift_forward")
+    dst = np.array([(t.dst() or pd.Timedelta(0)) if t is not pd.NaT else pd.Timedelta(0) for t in aware])
+    shifted = idx - pd.to_timedelta(dst)
+    return shifted.date
+
+
 def daily_max_by_lead(hourly: pd.DataFrame, variable: str = "temperature_2m",
-                      leads=LEADS) -> pd.DataFrame:
-    """Long frame (target_date, lead, forecast) from a previous-runs hourly frame."""
+                      leads=LEADS, tz: str | None = None) -> pd.DataFrame:
+    """Long frame (target_date, lead, forecast) from a previous-runs hourly frame.
+
+    Pass ``tz`` to group by the standard-time climate day instead of the clock day.
+    """
     df = hourly.copy()
-    df["target_date"] = pd.to_datetime(df.index).date
+    df["target_date"] = climate_day(df.index, tz)
     rows = []
     for lead in (0, *leads):
         col = variable if lead == 0 else f"{variable}_previous_day{lead}"
@@ -51,7 +71,7 @@ def pull_forecasts(station: Station, start: date, end: date, models=MODELS, lead
     for model in models:
         h = open_meteo.previous_runs(station.lat, station.lon, start, end, variable="temperature_2m",
                                      model=model, previous_days=max(leads), timezone=station.tz, **kw)
-        d = daily_max_by_lead(h, leads=leads)
+        d = daily_max_by_lead(h, leads=leads, tz=station.tz)
         d["model"] = model
         frames.append(d)
     out = pd.concat(frames, ignore_index=True)
