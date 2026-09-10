@@ -1,4 +1,4 @@
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 
 import numpy as np
 import pandas as pd
@@ -71,7 +71,7 @@ def test_screen_with_stubs(monkeypatch):
                        "yes_bid": [0.22, 0.19, 0.5], "yes_ask": [0.23, 0.20, 0.6]})
     monkeypatch.setattr(kx, "markets", lambda status="open", series_ticker=None, **kw: mk.copy())
     monkeypatch.setattr(R, "observed_so_far", lambda st, now: 0.02 if st.key == "DEN" else 0.0)
-    monkeypatch.setattr(R, "remaining_totals", lambda st, now, models=R.MODELS: {m: 0.3 for m in models})
+    monkeypatch.setattr(R, "remaining_totals", lambda st, now, models=R.MODELS, target=None: {m: 0.3 for m in models})
     df = R.screen(_fits(), now=now, target=date(2026, 9, 5))
     assert df.city.tolist() == ["Boston", "Denver"]
     den = df[df.city == "Denver"].iloc[0]
@@ -94,3 +94,18 @@ def test_log_and_resolve(monkeypatch):
                             pd.DataFrame({"ticker": ["KXRAIN-26SEP05-BOS"], "result": ["yes"]}))
         assert R.resolve_settled(L) == 1
         assert L.predictions(resolved=True).outcome.iloc[0] == 1
+
+
+def test_target_day_bounds_and_no_lock_for_tomorrow(monkeypatch):
+    st = R.RAIN_STATIONS["BOS"]
+    now = datetime(2026, 9, 10, 12, tzinfo=timezone.utc)   # 08:00 EDT Sep 10
+    s0, e0 = R.climate_day_bounds(st, now)
+    s1, e1 = R.climate_day_bounds(st, now, date(2026, 9, 11))
+    assert (s0.day, s0.hour) == (10, 1) and s1 - s0 == timedelta(days=1) and e1 - s1 == timedelta(days=1)
+    calls = []
+    monkeypatch.setattr(R, "observed_so_far", lambda st, now: calls.append("obs") or 0.5)
+    monkeypatch.setattr(R, "remaining_totals", lambda st, now, models=R.MODELS, target=None: {m: 0.0 for m in models})
+    p, info = R.probability(st, _fits(), now, target=date(2026, 9, 11))
+    assert calls == [] and not info["locked"] and p < 0.2      # tomorrow: gauge ignored, forecast used
+    p, info = R.probability(st, _fits(), now)
+    assert calls == ["obs"] and info["locked"] and p == 1.0    # today: gauge already wet

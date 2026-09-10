@@ -189,10 +189,19 @@ def observed_so_far(st: RainStation, now: datetime) -> float:
     return round(sum(byhour.values()) / 25.4, 3)
 
 
-def remaining_totals(st: RainStation, now: datetime, models=MODELS) -> dict[str, float]:
-    """Each model's precipitation total from the current hour to the end of the climate day."""
+def climate_day_bounds(st: RainStation, now: datetime, target: date | None = None) -> tuple[datetime, datetime]:
+    """(start, end) of the climate day for ``target`` (default: the current one)."""
+    start = climate_day_start(now, st.tz)
+    if target is not None:
+        start = start + timedelta(days=(target - start.date()).days)
+    return start, start + timedelta(days=1)
+
+
+def remaining_totals(st: RainStation, now: datetime, models=MODELS, target: date | None = None) -> dict[str, float]:
+    """Each model's precipitation total over the still-to-come hours of the target climate day."""
     local = now.astimezone(ZoneInfo(st.tz))
-    end = climate_day_start(now, st.tz) + timedelta(days=1)
+    start, end = climate_day_bounds(st, now, target)
+    begin = max(start, local.replace(minute=0, second=0, microsecond=0))
     out = {}
     for model in models:
         js = http.get_json("https://api.open-meteo.com/v1/forecast",
@@ -203,18 +212,25 @@ def remaining_totals(st: RainStation, now: datetime, models=MODELS) -> dict[str,
         tot = 0.0
         for t, v in zip(h["time"], h["precipitation"]):
             ts = datetime.fromisoformat(t).replace(tzinfo=ZoneInfo(st.tz))
-            if local.replace(minute=0, second=0, microsecond=0) <= ts < end:
+            if begin <= ts < end:
                 tot += float(v or 0.0)
         out[model] = round(tot, 3)
     return out
 
 
 def probability(st: RainStation, fits: pd.DataFrame, now: datetime, totals: dict[str, float] | None = None,
-                so_far: float | None = None) -> tuple[float, dict]:
-    so_far = observed_so_far(st, now) if so_far is None else so_far
+                so_far: float | None = None, target: date | None = None) -> tuple[float, dict]:
+    """Calibrated P(measurable rain) for the target climate day (default: today's).
+
+    Observed rain only counts when the target day is the one in progress.
+    """
+    start, _ = climate_day_bounds(st, now, target)
+    in_progress = target is None or start <= now.astimezone(ZoneInfo(st.tz))
+    if so_far is None:
+        so_far = observed_so_far(st, now) if in_progress else 0.0
     if so_far >= WET_IN:
         return 1.0, {"observed_in": so_far, "locked": True}
-    totals = totals if totals is not None else remaining_totals(st, now)
+    totals = totals if totals is not None else remaining_totals(st, now, target=target)
     ps = {m: logistic_prob(params_for(fits, st.key, m), t) for m, t in totals.items()}
     return float(np.mean(list(ps.values()))), {"observed_in": so_far, "locked": False, "totals": totals, "per_model": ps}
 
@@ -244,7 +260,7 @@ def screen(fits: pd.DataFrame, now: datetime | None = None, target: date | None 
         st = BY_CITY.get(m.city)
         if st is None:
             continue
-        p, info = probability(st, fits, now)
+        p, info = probability(st, fits, now, target=m.target_date)
         bid, ask = m.yes_bid, m.yes_ask
         rows.append({"ticker": m.ticker, "city": m.city, "target_date": m.target_date, "p": round(p, 3),
                      "observed_in": info["observed_in"], "locked": info["locked"],

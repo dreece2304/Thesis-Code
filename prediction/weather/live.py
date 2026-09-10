@@ -45,8 +45,8 @@ TRADE_STATIONS = set(os.environ.get("WEATHER_TRADE_STATIONS", "NYC,MIA").split("
 
 
 def weather_ledger_path() -> Path:
-    return Path(os.environ.get("WEATHER_LEDGER_PATH",
-                               str(Path(os.environ.get("DATA_CACHE_DIR", "data_cache")) / "ledger_weather.duckdb")))
+    """Tracked in git (ledger/weather.duckdb) so the daily routine keeps history across sessions."""
+    return Path(os.environ.get("WEATHER_LEDGER_PATH", "ledger/weather.duckdb"))
 
 
 def require_paper(env=None) -> None:
