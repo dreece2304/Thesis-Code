@@ -54,8 +54,8 @@ def _stub_live(monkeypatch, tmp_path):
 
     def forecast(lat, lon, hourly=None, daily=None, forecast_days=7, timezone="UTC", models=None, **kw):
         idx = pd.date_range("2026-09-02", periods=7, freq="D")
-        base = {"ecmwf_ifs025": 88.0, "gfs_seamless": 90.0, "icon_seamless": 87.0}[models]
-        return pd.DataFrame({"temperature_2m_max": base}, index=idx)
+        base = {"ecmwf_ifs025": 88.0, "gfs_seamless": 90.0, "icon_seamless": 87.0}.get(models, 88.5)
+        return pd.DataFrame({"temperature_2m_max": base, "precipitation_sum": 0.0}, index=idx)
 
     monkeypatch.setattr(kx, "markets", markets)
     monkeypatch.setattr(kx, "orderbook", lambda ticker, depth=10: {"yes": [(0.30, 100.0)], "no": [(0.67, 50.0)]})

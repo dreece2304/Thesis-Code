@@ -24,7 +24,7 @@ from .market_model import baseline_forecast, baseline_probability, reconstructed
 from .model import probability
 from .sizing import (CAP_PER_BET, CAP_TOTAL, KELLY_MULT, PAPER_BANKROLL, bet_key,
                      correlation_groups, size_bet)
-from .stations import cut
+from .stations import WET_IN, cut
 
 
 @dataclass
@@ -106,6 +106,8 @@ def run_backtest(archive: pd.DataFrame, cfg: BacktestConfig | None = None) -> Ba
     leads = (cfg.entry_lead,) if cfg.add_lead is None or cfg.add_lead == cfg.entry_lead else (cfg.entry_lead, cfg.add_lead)
     settle_map = a.groupby(["station", "target_date"])["settlement"].first().to_dict()
     fc_map = {k: dict(zip(g.model, g.forecast)) for k, g in a.groupby(["station", "target_date", "lead"])}
+    wet_map = {k: {m: (p >= WET_IN) for m, p in zip(g.model, g.precip) if pd.notna(p)}
+               for k, g in a.groupby(["station", "target_date", "lead"])} if "precip" in a else {}
     stations = sorted(a.station.unique())
     months = sorted(a["target_date"].dt.to_period("M").unique())
     months = months[cfg.warmup_months:]
@@ -147,7 +149,7 @@ def run_backtest(archive: pd.DataFrame, cfg: BacktestConfig | None = None) -> Ba
                     settlement = settle_map.get((station, target))
                     if not fc or settlement is None:
                         continue
-                    dists = lookup(fits, station, lead, target.month)
+                    dists = lookup(fits, station, lead, target.month, wet=wet_map.get((station, target, lead)))
                     if not dists:
                         continue
                     rv = recent_variance(a, station, lead, asof=d)

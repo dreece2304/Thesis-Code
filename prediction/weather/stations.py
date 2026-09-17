@@ -41,7 +41,8 @@ ACTIVE = [s for s in STATIONS.values() if s.tier == 1]
 BY_SERIES = {s.series: s for s in STATIONS.values()}
 
 # Open-Meteo model ids (deterministic runs) used for the error archive and live scoring.
-MODELS = ("ecmwf_ifs025", "gfs_seamless", "icon_seamless")
+MODELS = ("ecmwf_ifs025", "gfs_seamless", "icon_seamless", "ncep_nbm_conus", "ncep_hrrr_conus", "ecmwf_aifs025_single")
+WET_IN = 0.05   # model-forecast precipitation that flags a wet day for the temperature error fits
 LEADS = (1, 2, 3, 4, 5)
 
 

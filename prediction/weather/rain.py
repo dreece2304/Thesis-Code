@@ -32,7 +32,8 @@ from scipy.optimize import minimize
 from shared.data import http, kalshi as kx
 from shared.data.cache import cached_frame
 
-MODELS = ("ecmwf_ifs025", "gfs_seamless", "icon_seamless")
+MODELS = ("ecmwf_ifs025", "gfs_seamless", "icon_seamless", "ncep_nbm_conus", "ncep_hrrr_conus", "ecmwf_aifs025_single")
+GLOBAL_MODELS = MODELS[:3]
 PREVIOUS_RUNS_URL = "https://previous-runs-api.open-meteo.com/v1/forecast"
 NCEI_URL = "https://www.ncei.noaa.gov/access/services/data/v1"
 WET_IN = 0.01
@@ -113,7 +114,7 @@ def logistic_prob(params: tuple[float, float], total: float) -> float:
 
 
 @cached_frame("rain_calibration", ttl_seconds=None)
-def calibration_frame(station_key: str, start: date, end: date, lead: int = 1) -> pd.DataFrame:
+def calibration_frame(station_key: str, start: date, end: date, lead: int = 1, models=MODELS) -> pd.DataFrame:
     """(date, model, forecast total, observed total) for one station."""
     st = RAIN_STATIONS[station_key]
     obs = http.get_json(NCEI_URL, params={"dataset": "daily-summaries", "stations": st.ghcn, "startDate": str(start),
@@ -121,12 +122,17 @@ def calibration_frame(station_key: str, start: date, end: date, lead: int = 1) -
                                           "units": "standard", "includeAttributes": "false"}, source="ghcn")
     o = pd.Series({x["DATE"]: float(x["PRCP"]) for x in obs if x.get("PRCP") not in (None, "")})
     frames = []
-    for model in MODELS:
+    for model in models:
         col = f"precipitation_previous_day{lead}"
-        js = http.get_json(PREVIOUS_RUNS_URL, params={"latitude": st.lat, "longitude": st.lon, "start_date": str(start),
-                                                      "end_date": str(end), "hourly": col, "models": model,
-                                                      "precipitation_unit": "inch", "timezone": st.tz}, source="open_meteo")
+        try:
+            js = http.get_json(PREVIOUS_RUNS_URL, params={"latitude": st.lat, "longitude": st.lon, "start_date": str(start),
+                                                          "end_date": str(end), "hourly": col, "models": model,
+                                                          "precipitation_unit": "inch", "timezone": st.tz}, source="open_meteo")
+        except Exception:  # a model missing for one station must not sink the whole fit
+            continue
         h = js["hourly"]
+        if col not in h:
+            continue
         df = pd.DataFrame({"t": h["time"], "p": h[col]})
         df["d"] = df["t"].str[:10]
         daily = df.groupby("d")["p"].sum(min_count=20)
@@ -142,7 +148,7 @@ def fit_all(stations=None, years: int = 3, end: date | None = None) -> pd.DataFr
     end = end or (date.today() - timedelta(days=2))
     start = end - timedelta(days=365 * years)
     keys = stations or list(RAIN_STATIONS)
-    frames = [calibration_frame(k, start, end) for k in keys]
+    frames = [calibration_frame(k, start, end, models=tuple(MODELS)) for k in keys]
     J = pd.concat(frames, ignore_index=True)
     J["wet"] = (J["observed"] >= WET_IN).astype(int)
     rows = []
@@ -181,12 +187,23 @@ def observed_so_far(st: RainStation, now: datetime) -> float:
                        params={"start": start.isoformat(), "limit": 100},
                        headers={"Accept": "application/geo+json"}, source="nws")
     byhour: dict[str, float] = {}
+    longest = 0.0   # 3h and 6h accumulations, reported at synoptic hours; a floor on the day's total
+    wet_text = False
     for f in js.get("features", []):
         p = f["properties"]
         v = (p.get("precipitationLastHour") or {}).get("value")
         if v:
             byhour[p["timestamp"][:13]] = max(byhour.get(p["timestamp"][:13], 0.0), float(v))
-    return round(sum(byhour.values()) / 25.4, 3)
+        for k in ("precipitationLast3Hours", "precipitationLast6Hours"):
+            v = (p.get(k) or {}).get("value")
+            if v:
+                longest = max(longest, float(v))
+        if any(w in (p.get("textDescription") or "") for w in ("Rain", "Thunderstorm", "Drizzle", "Showers")):
+            wet_text = True
+    total_mm = max(sum(byhour.values()), longest)
+    if total_mm == 0.0 and wet_text:
+        total_mm = 0.254   # rain observed in the METAR text but no gauge field: treat as measurable
+    return round(total_mm / 25.4, 3)
 
 
 def climate_day_bounds(st: RainStation, now: datetime, target: date | None = None) -> tuple[datetime, datetime]:
@@ -204,16 +221,25 @@ def remaining_totals(st: RainStation, now: datetime, models=MODELS, target: date
     begin = max(start, local.replace(minute=0, second=0, microsecond=0))
     out = {}
     for model in models:
-        js = http.get_json("https://api.open-meteo.com/v1/forecast",
-                           params={"latitude": st.lat, "longitude": st.lon, "hourly": "precipitation", "models": model,
-                                   "forecast_days": 3, "timezone": st.tz, "precipitation_unit": "inch"},
-                           source="open_meteo")
-        h = js["hourly"]
-        tot = 0.0
-        for t, v in zip(h["time"], h["precipitation"]):
+        try:
+            js = http.get_json("https://api.open-meteo.com/v1/forecast",
+                               params={"latitude": st.lat, "longitude": st.lon, "hourly": "precipitation", "models": model,
+                                       "forecast_days": 3, "timezone": st.tz, "precipitation_unit": "inch"},
+                               source="open_meteo")
+        except Exception:
+            continue
+        h = js.get("hourly", {})
+        vals = h.get("precipitation") or []
+        tot, n = 0.0, 0
+        for t, v in zip(h.get("time", []), vals):
             ts = datetime.fromisoformat(t).replace(tzinfo=ZoneInfo(st.tz))
             if begin <= ts < end:
-                tot += float(v or 0.0)
+                if v is None:
+                    continue
+                tot += float(v)
+                n += 1
+        if n == 0:
+            continue  # model does not cover the window (HRRR beyond its horizon)
         out[model] = round(tot, 3)
     return out
 
@@ -231,7 +257,14 @@ def probability(st: RainStation, fits: pd.DataFrame, now: datetime, totals: dict
     if so_far >= WET_IN:
         return 1.0, {"observed_in": so_far, "locked": True}
     totals = totals if totals is not None else remaining_totals(st, now, target=target)
-    ps = {m: logistic_prob(params_for(fits, st.key, m), t) for m, t in totals.items()}
+    ps = {}
+    for m, t in totals.items():
+        try:
+            ps[m] = logistic_prob(params_for(fits, st.key, m), t)
+        except KeyError:
+            continue
+    if not ps:
+        raise ValueError(f"no calibrated model has data for {st.key}")
     return float(np.mean(list(ps.values()))), {"observed_in": so_far, "locked": False, "totals": totals, "per_model": ps}
 
 

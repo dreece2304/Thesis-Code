@@ -9,7 +9,9 @@ import pandas as pd
 
 from .model import ErrorDist, fit_error_distribution
 
-KEY = ["station", "lead", "model", "month"]
+KEY = ["station", "lead", "model", "month", "wet"]
+WET_IN = 0.05
+MIN_N_WET = 40
 
 
 def fits_path() -> Path:
@@ -46,9 +48,26 @@ def fit_errors(archive: pd.DataFrame, before: pd.Timestamp | None = None, min_n:
                 continue
             d = fit_error_distribution(sub["error"].to_numpy())
             rec = d.to_record()
-            rec.update({"station": st, "lead": int(lead), "model": model, "month": month, "pool": pool,
+            rec.update({"station": st, "lead": int(lead), "model": model, "month": month, "wet": -1, "pool": pool,
                         "skew": float(pd.Series(sub["error"]).skew())})
             rows.append(rec)
+            # wet-day split: the model's own forecast precipitation for the target day.
+            # Fitted on a wider month pool (all year if needed) because wet days are scarce.
+            if "precip" in sub and sub["precip"].notna().any():
+                for wet in (0, 1):
+                    w = sub[(sub["precip"] >= WET_IN) == bool(wet)]
+                    wpool = pool
+                    while len(w) < MIN_N_WET and wpool < 5:
+                        wpool += 1
+                        w = _month_pool(g, month, wpool)
+                        w = w[(w["precip"] >= WET_IN) == bool(wet)]
+                    if len(w) < MIN_N_WET:
+                        continue
+                    dw = fit_error_distribution(w["error"].to_numpy())
+                    recw = dw.to_record()
+                    recw.update({"station": st, "lead": int(lead), "model": model, "month": month, "wet": wet,
+                                 "pool": wpool, "skew": float(pd.Series(w["error"]).skew())})
+                    rows.append(recw)
     return pd.DataFrame(rows)
 
 
@@ -64,10 +83,26 @@ def load_fits(path: str | Path | None = None) -> pd.DataFrame:
     return pd.read_parquet(p)
 
 
-def lookup(fits: pd.DataFrame, station: str, lead: int, month: int) -> dict[str, ErrorDist]:
-    """model -> ErrorDist for one station, lead and month."""
+def lookup(fits: pd.DataFrame, station: str, lead: int, month: int,
+           wet: dict[str, bool] | None = None) -> dict[str, ErrorDist]:
+    """model -> ErrorDist for one station, lead and month.
+
+    ``wet`` maps model -> whether that model forecasts a wet day; when given
+    and a wet/dry split exists for the model, the split distribution is used.
+    """
     sub = fits[(fits.station == station) & (fits.lead == lead) & (fits.month == month)]
-    return {r["model"]: ErrorDist.from_record(r) for r in sub.to_dict("records")}
+    if "wet" not in sub:
+        sub = sub.assign(wet=-1)
+    out = {}
+    for model, g in sub.groupby("model"):
+        want = -1 if wet is None or model not in wet else int(bool(wet[model]))
+        r = g[g.wet == want]
+        if r.empty:
+            r = g[g.wet == -1]
+        if r.empty:
+            continue
+        out[model] = ErrorDist.from_record(r.iloc[0].to_dict())
+    return out
 
 
 def recent_variance(archive: pd.DataFrame, station: str, lead: int, asof: pd.Timestamp,

@@ -35,7 +35,13 @@ def _stub_archive_sources(monkeypatch, days=800, seed=0):
     def prev_runs(lat, lon, start, end, variable, model, previous_days, timezone, **kw):
         t = pd.date_range(dates[0], periods=24 * days, freq="h")
         df = pd.DataFrame(index=t)
-        bias = {"ecmwf_ifs025": 0.0, "gfs_seamless": 1.5, "icon_seamless": -1.0}[model]
+        if variable == "precipitation":
+            df[variable] = 0.0
+            for k in range(1, previous_days + 1):
+                df[f"{variable}_previous_day{k}"] = np.repeat(rng.exponential(0.01, days), 24)
+            mask = (df.index >= pd.Timestamp(start)) & (df.index < pd.Timestamp(end) + pd.Timedelta(days=1))
+            return df[mask]
+        bias = {"ecmwf_ifs025": 0.0, "gfs_seamless": 1.5, "icon_seamless": -1.0}.get(model, 0.5)
         daily = np.repeat(truth, 24)
         df[variable] = daily - 15 + 15 * (t.hour == 15) - bias + np.repeat(rng.normal(0, 1.0, days), 24)
         for k in range(1, previous_days + 1):
@@ -56,7 +62,7 @@ def test_build_archive_and_error_fits(monkeypatch):
     _stub_archive_sources(monkeypatch)
     a = A.build_archive([STATIONS["NYC"]], years=2, end=date(2026, 2, 1), save=True)
     assert list(a.columns) == A.COLUMNS
-    assert set(a.model) == set(("ecmwf_ifs025", "gfs_seamless", "icon_seamless"))
+    assert set(("ecmwf_ifs025", "gfs_seamless", "icon_seamless")) <= set(a.model)
     assert set(a.lead) == {0, 1, 2, 3, 4, 5}
     assert a.error.notna().mean() > 0.95
     assert A.load_archive().shape == a.shape

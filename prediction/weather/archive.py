@@ -19,7 +19,7 @@ from shared.data import ghcn, open_meteo
 
 from .stations import ACTIVE, LEADS, MODELS, Station
 
-COLUMNS = ["station", "target_date", "lead", "model", "forecast", "settlement", "error"]
+COLUMNS = ["station", "target_date", "lead", "model", "forecast", "precip", "settlement", "error"]
 
 
 def archive_dir() -> Path:
@@ -46,12 +46,9 @@ def climate_day(index: pd.DatetimeIndex, tz: str | None) -> np.ndarray:
     return shifted.date
 
 
-def daily_max_by_lead(hourly: pd.DataFrame, variable: str = "temperature_2m",
-                      leads=LEADS, tz: str | None = None) -> pd.DataFrame:
-    """Long frame (target_date, lead, forecast) from a previous-runs hourly frame.
-
-    Pass ``tz`` to group by the standard-time climate day instead of the clock day.
-    """
+def daily_by_lead(hourly: pd.DataFrame, variable: str, agg: str, leads=LEADS, tz: str | None = None,
+                  out: str = "forecast") -> pd.DataFrame:
+    """Long frame (target_date, lead, <out>) aggregating a previous-runs hourly frame per climate day."""
     df = hourly.copy()
     df["target_date"] = climate_day(df.index, tz)
     rows = []
@@ -59,22 +56,40 @@ def daily_max_by_lead(hourly: pd.DataFrame, variable: str = "temperature_2m",
         col = variable if lead == 0 else f"{variable}_previous_day{lead}"
         if col not in df:
             continue
-        m = df.groupby("target_date")[col].agg(["max", "count"])
+        m = df.groupby("target_date")[col].agg([agg, "count"])
         m = m[m["count"] >= 20]  # need most of the day
-        rows.append(pd.DataFrame({"target_date": m.index, "lead": lead, "forecast": m["max"].to_numpy()}))
-    return pd.concat(rows, ignore_index=True) if rows else pd.DataFrame(columns=["target_date", "lead", "forecast"])
+        rows.append(pd.DataFrame({"target_date": m.index, "lead": lead, out: m[agg].to_numpy()}))
+    return pd.concat(rows, ignore_index=True) if rows else pd.DataFrame(columns=["target_date", "lead", out])
+
+
+def daily_max_by_lead(hourly: pd.DataFrame, variable: str = "temperature_2m",
+                      leads=LEADS, tz: str | None = None) -> pd.DataFrame:
+    """Daily max per lead (kept for the temperature archive and tests)."""
+    return daily_by_lead(hourly, variable, "max", leads, tz)
 
 
 def pull_forecasts(station: Station, start: date, end: date, models=MODELS, leads=LEADS,
                    **kw) -> pd.DataFrame:
     frames = []
     for model in models:
-        h = open_meteo.previous_runs(station.lat, station.lon, start, end, variable="temperature_2m",
-                                     model=model, previous_days=max(leads), timezone=station.tz, **kw)
+        try:
+            h = open_meteo.previous_runs(station.lat, station.lon, start, end, variable="temperature_2m",
+                                         model=model, previous_days=max(leads), timezone=station.tz, **kw)
+        except Exception:
+            continue
         d = daily_max_by_lead(h, leads=leads, tz=station.tz)
+        try:
+            hp = open_meteo.previous_runs(station.lat, station.lon, start, end, variable="precipitation",
+                                          model=model, previous_days=max(leads), timezone=station.tz, **kw)
+            dp = daily_by_lead(hp, "precipitation", "sum", leads, station.tz, out="precip")
+            d = d.merge(dp, on=["target_date", "lead"], how="left")
+        except Exception:
+            d["precip"] = np.nan
         d["model"] = model
         frames.append(d)
     out = pd.concat(frames, ignore_index=True)
+    if "precip" not in out:
+        out["precip"] = np.nan
     out["station"] = station.key
     return out
 
@@ -112,12 +127,16 @@ def load_archive(path: str | Path | None = None) -> pd.DataFrame:
         raise FileNotFoundError(f"no archive at {p}; run build_archive() first")
     df = pd.read_parquet(p)
     df["target_date"] = pd.to_datetime(df["target_date"])
+    if "precip" not in df:
+        df["precip"] = np.nan
     return df
 
 
 def update_archive(stations=ACTIVE, days: int = 14, **kw) -> pd.DataFrame:
     """Append the last ``days`` of forecasts and settlements to the saved archive."""
     old = load_archive() if archive_path().exists() else pd.DataFrame(columns=COLUMNS)
+    if "precip" not in old:
+        old["precip"] = np.nan
     end = date.today() - timedelta(days=1)
     new = build_archive(stations, years=0, end=end, save=False, **{**kw})
     if new.empty and days:

@@ -26,7 +26,7 @@ from . import kalshi as KW
 from . import market_model as mm
 from .model import probability
 from .sizing import PAPER_BANKROLL, bet_key, correlation_groups, size_bet
-from .stations import ACTIVE, MODELS, Station
+from .stations import ACTIVE, MODELS, WET_IN, Station
 
 PROJECT = "weather"
 # Kalshi opens each day's KXHIGH markets at 14:00 UTC the day before, so the
@@ -57,14 +57,25 @@ def require_paper(env=None) -> None:
 
 def model_forecasts(station: Station, target: date, models=MODELS, **kw) -> dict[str, float]:
     """Deterministic daily-high forecast per model for one local date."""
+    return {m: v[0] for m, v in model_forecasts_with_precip(station, target, models, **kw).items()}
+
+
+def model_forecasts_with_precip(station: Station, target: date, models=MODELS, **kw) -> dict[str, tuple[float, float]]:
+    """model -> (daily high, daily precipitation) for one local date; models without data are skipped."""
     out = {}
     for model in models:
-        df = open_meteo.forecast(station.lat, station.lon, hourly=None, daily=("temperature_2m_max",),
-                                 forecast_days=7, timezone=station.tz, models=model, **kw)
-        s = df["temperature_2m_max"]
-        s.index = pd.to_datetime(s.index).date
-        if target in s.index and pd.notna(s.loc[target]):
-            out[model] = float(s.loc[target])
+        try:
+            df = open_meteo.forecast(station.lat, station.lon, hourly=None,
+                                     daily=("temperature_2m_max", "precipitation_sum"),
+                                     forecast_days=7, timezone=station.tz, models=model, **kw)
+        except Exception:
+            continue
+        if "temperature_2m_max" not in df:
+            continue
+        df.index = pd.to_datetime(df.index).date
+        if target in df.index and pd.notna(df.loc[target, "temperature_2m_max"]):
+            p = df.loc[target, "precipitation_sum"] if "precipitation_sum" in df else float("nan")
+            out[model] = (float(df.loc[target, "temperature_2m_max"]), float(p) if pd.notna(p) else 0.0)
     return out
 
 
@@ -102,9 +113,11 @@ def score(stations, archive: pd.DataFrame, fits: pd.DataFrame, now: datetime, sn
             fit_lead = max(lead, 1)   # lead-0 decisions use the lead-1 error fit (conservative)
             key = (st.key, m.target_date)
             if key not in fc_cache:
-                fc_cache[key] = model_forecasts(st, m.target_date, **kw)
-            fc = fc_cache[key]
-            dists = err.lookup(fits, st.key, fit_lead, m.target_date.month)
+                fc_cache[key] = model_forecasts_with_precip(st, m.target_date, **kw)
+            fcp = fc_cache[key]
+            fc = {k: v[0] for k, v in fcp.items()}
+            wet = {k: v[1] >= WET_IN for k, v in fcp.items()}
+            dists = err.lookup(fits, st.key, fit_lead, m.target_date.month, wet=wet)
             if not fc or not dists:
                 continue
             rv = err.recent_variance(archive, st.key, fit_lead, asof=pd.Timestamp(m.target_date))
@@ -116,6 +129,7 @@ def score(stations, archive: pd.DataFrame, fits: pd.DataFrame, now: datetime, sn
                 {"id": None, "yes_bid": m.yes_bid, "yes_ask": m.yes_ask}
             bid, ask = snap.get("yes_bid"), snap.get("yes_ask")
             mid = (bid + ask) / 2 if bid is not None and ask is not None else np.nan
+            comp["wet"] = {k: bool(v) for k, v in wet.items()}
             rows.append({"ticker": m.ticker, "station": st.key, "target_date": m.target_date, "lead": lead,
                          "threshold": int(m.threshold), "side": m.side, "p": p, "sd": sd, "p_baseline": p_base,
                          "yes_bid": bid, "yes_ask": ask, "mid": mid, "snapshot_id": snap.get("id"),
