@@ -74,6 +74,12 @@ RAIN_STATIONS: dict[str, RainStation] = {s.key: s for s in [
     RainStation("LAX", "Los Angeles", "CLILAX", "KLAX", "USW00023174", 33.938, -118.389, "America/Los_Angeles"),
     RainStation("SFO", "San Francisco", "CLISFO", "KSFO", "USW00023234", 37.619, -122.375, "America/Los_Angeles"),
     RainStation("SEA", "Seattle", "CLISEA", "KSEA", "USW00024233", 47.449, -122.309, "America/Los_Angeles"),
+    # added 2026-09-19 when Kalshi went to 27 cities
+    RainStation("PVD", "Providence", "CLIPVD", "KPVD", "USW00014765", 41.724, -71.428, "America/New_York"),
+    RainStation("MKE", "Milwaukee", "CLIMKE", "KMKE", "USW00014839", 42.947, -87.897, "America/Chicago"),
+    RainStation("LEX", "Lexington", "CLILEX", "KLEX", "USW00093820", 38.037, -84.606, "America/New_York"),
+    RainStation("CMH", "Columbus", "CLICMH", "KCMH", "USW00014821", 39.998, -82.892, "America/New_York"),
+    RainStation("CLL", "College Station", "CLICLL", "KCLL", "USW00003904", 30.589, -96.364, "America/Chicago"),
 ]}
 BY_CITY = {s.city: s for s in RAIN_STATIONS.values()}
 
