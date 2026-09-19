@@ -1,0 +1,13 @@
+# Project 4a. conda-forge ships a prebuilt Geant4 with data files; no source build needed.
+#   mamba env create -f envs/geant4.yml && mamba activate geant4
+name: geant4
+channels: [conda-forge]
+dependencies:
+  - python=3.11
+  - geant4
+  - cmake
+  - cxx-compiler
+  - numpy
+  - pandas
+  - scipy
+  - matplotlib

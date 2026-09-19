@@ -1,0 +1,32 @@
+# Main environment: everything except the heavy science stacks.
+#   mamba env create -f envs/side-projects.yml && mamba activate side-projects
+#   uv pip install -e ".[dev,prediction,investing,forecasting,data,nanofab]"
+name: side-projects
+channels: [conda-forge]
+dependencies:
+  - python=3.11
+  - pip
+  - uv
+  - nodejs>=22          # Claude Code CLI and MCP servers
+  - duckdb
+  - python-duckdb
+  - numpy
+  - pandas
+  - pyarrow
+  - scipy
+  - matplotlib
+  - requests
+  - python-dotenv
+  - pytest
+  - pytest-cov
+  - jupyterlab
+  - ipykernel
+  - ruff
+  - git-filter-repo     # one-off, for the migration
+  - pip:
+      - hmmlearn
+      - yfinance
+      - fredapi
+      - fastapi
+      - uvicorn
+      - ecmwf-opendata   # IFS/AIFS GRIB direct from ECMWF, optional

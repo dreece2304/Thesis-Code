@@ -37,8 +37,14 @@ blocked. Keep both current. The weather model spec it references lives at
   The WSL scan must be run locally with `python -m audit.scan`; the Geant4 PSF
   code is not in this repo. Yahoo Finance is unreachable from the web sandbox
   so the investing real-data backtest has to run on the home machine.
-- This repo was `Thesis-Code` (2018 MATLAB battery model). Those files stay at
-  the root untouched until Duncan decides where they go.
+- Migration: this work is moving to its own repo `side-projects` on Duncan's
+  WSL machine. `docs/MIGRATION.md` and `scripts/migrate_to_side_projects.sh`
+  do it; `envs/*.yml` are the miniforge environments. `Thesis-Code` keeps the
+  2018 MATLAB files. After the move, `main` in `side-projects` is the branch.
+- Rain markets: 27 cities as of 2026-09-19; five new stations run on the
+  pooled calibration until `rain.fit_all()` is rerun on the new machine.
+- Daily budget rule and manual bet tracking: `prediction/weather/plan.py`
+  and `bets.py`. Duncan's first two tracked bets are in `ledger/weather.duckdb`.
 
 ---
 

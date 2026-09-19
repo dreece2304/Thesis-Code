@@ -1,0 +1,16 @@
+# Project 5. GPAW needs conda-forge builds (libxc, BLAS); keep it out of the main env.
+#   mamba env create -f envs/materials.yml && mamba activate materials
+name: materials
+channels: [conda-forge]
+dependencies:
+  - python=3.11
+  - pip
+  - gpaw
+  - ase
+  - pymatgen
+  - mlflow
+  - pytorch            # CPU build from conda-forge; swap for the cuda variant on the GPU box
+  - pip:
+      - mace-torch
+      - botorch
+      - mattersim
